@@ -9,10 +9,16 @@
 # In production, these will be replaced by MCP Toolbox → AlloyDB connections.
 # ============================================================================
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
 from google.adk.tools import ToolContext
+
+# AlloyDB 우선 조회용 공용 헬퍼 / Shared helper for AlloyDB-first lookups
+from careflow.db.alloydb_client import query_dict
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +161,49 @@ def get_health_metrics(
     })
     tool_context.state["health_metric_queries"] = query_log
 
+    # ---------------------------------------------------------------
+    # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
+    # 환경변수 ALLOYDB_CONN_URI가 설정되어 있으면 실 DB에서 시계열을 가져온다.
+    # If ALLOYDB_CONN_URI is set, fetch the time-series from AlloyDB.
+    # ---------------------------------------------------------------
+    db_rows = query_dict(
+        """
+        SELECT measured_at, value_primary, value_secondary, unit
+        FROM health_metrics
+        WHERE patient_id = :pid
+          AND metric_type = :mtype
+          AND measured_at >= NOW() - (:days || ' days')::interval
+        ORDER BY measured_at ASC
+        """,
+        {"pid": patient_id, "mtype": metric_type, "days": days},
+    )
+    if db_rows:
+        logger.info(f"health_metrics.from_db: {len(db_rows)} rows")
+        values = [
+            {
+                "date": (
+                    row["measured_at"].strftime("%Y-%m-%d")
+                    if hasattr(row["measured_at"], "strftime")
+                    else str(row["measured_at"])
+                ),
+                "value": row.get("value_primary"),
+            }
+            for row in db_rows
+        ]
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "metric_type": metric_type,
+            "period_days": days,
+            "data_points": len(values),
+            "values": values,
+        }
+
+    # ---------------------------------------------------------------
+    # 2단계: mock 데이터 fallback / Step 2: Fallback to mock data
+    # ---------------------------------------------------------------
+    logger.info("health_metrics.fallback_to_mock")
     patient_data = _MOCK_HEALTH_METRICS.get(patient_id)
     if patient_data is None:
         return {
@@ -178,6 +227,7 @@ def get_health_metrics(
 
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "metric_type": metric_type,
         "period_days": days,
@@ -208,6 +258,48 @@ def get_medication_history(
     # state에 최근 조회 환자 기록 / Track last queried patient in state
     tool_context.state["last_medication_query_patient"] = patient_id
 
+    # ---------------------------------------------------------------
+    # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
+    # ---------------------------------------------------------------
+    # medications 테이블에서 기본 약물 정보 조회
+    # Fetch base medication info from the `medications` table.
+    db_rows = query_dict(
+        """
+        SELECT id, name, dosage, frequency, timing, status, prescribed_date
+        FROM medications
+        WHERE patient_id = :pid
+        ORDER BY prescribed_date DESC
+        """,
+        {"pid": patient_id},
+    )
+    if db_rows:
+        logger.info(f"medication_history.from_db: {len(db_rows)} rows")
+        # 날짜 직렬화 + 표준 필드 매핑 / Serialize dates and normalize fields
+        medications = []
+        for row in db_rows:
+            prescribed = row.get("prescribed_date")
+            if hasattr(prescribed, "strftime"):
+                prescribed = prescribed.strftime("%Y-%m-%d")
+            medications.append({
+                "medication": row.get("name"),
+                "dosage": row.get("dosage"),
+                "frequency": row.get("frequency"),
+                "timing": row.get("timing"),
+                "status": row.get("status"),
+                "start_date": prescribed,
+            })
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "medication_count": len(medications),
+            "medications": medications,
+        }
+
+    # ---------------------------------------------------------------
+    # 2단계: mock 데이터 fallback / Step 2: Fallback to mock data
+    # ---------------------------------------------------------------
+    logger.info("medication_history.fallback_to_mock")
     medications = _MOCK_MEDICATIONS.get(patient_id)
     if medications is None:
         return {
@@ -217,6 +309,7 @@ def get_medication_history(
 
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "medication_count": len(medications),
         "medications": medications,
@@ -244,6 +337,46 @@ def get_visit_records(
     Returns:
         dict with "status", "patient_id", "period_days", "record_count", and "records" list.
     """
+    # ---------------------------------------------------------------
+    # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
+    # ---------------------------------------------------------------
+    # 실제 schema 컬럼: visit_date, doctor_name, hospital_name, structured_summary, key_findings
+    # Real schema columns: visit_date, doctor_name, hospital_name, structured_summary, key_findings
+    db_rows = query_dict(
+        """
+        SELECT visit_date AS date,
+               doctor_name AS provider,
+               hospital_name AS hospital,
+               structured_summary AS notes,
+               key_findings
+        FROM visit_records
+        WHERE patient_id = :pid
+          AND visit_date >= (CURRENT_DATE - (:days || ' days')::interval)
+        ORDER BY visit_date DESC
+        """,
+        {"pid": patient_id, "days": days},
+    )
+    if db_rows:
+        logger.info(f"visit_records.from_db: {len(db_rows)} rows")
+        # 날짜 직렬화 + key_findings 는 이미 dict (JSONB) 이므로 그대로 전달
+        # Serialize dates; key_findings is already a dict from JSONB
+        for row in db_rows:
+            if hasattr(row.get("date"), "strftime"):
+                row["date"] = row["date"].strftime("%Y-%m-%d")
+
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "period_days": days,
+            "record_count": len(db_rows),
+            "records": db_rows,
+        }
+
+    # ---------------------------------------------------------------
+    # 2단계: mock 데이터 fallback / Step 2: Fallback to mock data
+    # ---------------------------------------------------------------
+    logger.info("visit_records.fallback_to_mock")
     records = _MOCK_VISIT_RECORDS.get(patient_id)
     if records is None:
         return {
@@ -263,6 +396,7 @@ def get_visit_records(
 
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "period_days": days,
         "record_count": len(filtered),

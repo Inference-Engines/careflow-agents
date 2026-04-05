@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Optional
 
 from google.adk.tools import ToolContext
+from careflow.db.alloydb_client import query_dict, execute_write
+import json
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +268,24 @@ def store_visit_record(
     Returns:
         dict with "status", "visit_id", and stored record details.
     """
+    sql = """INSERT INTO visit_records (patient_id, visit_date, structured_summary, doctor_name, hospital_name, key_findings, raw_input)
+             VALUES (:pid, :vdate, :summ, :doc, :hosp, COALESCE(:kf::jsonb, '{}'::jsonb), :raw)
+             RETURNING id"""
+    db_rows = execute_write(sql, {
+        "pid": patient_id, "vdate": visit_date, "summ": summary,
+        "doc": doctor_name or "Unknown", "hosp": hospital_name or "Unknown",
+        "kf": key_findings, "raw": summary
+    })
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "visit_id": str(db_rows[0]["id"]),
+            "visit_date": visit_date,
+            "doctor_name": doctor_name or "Unknown",
+            "message": f"Visit record '{db_rows[0]['id']}' saved for {visit_date}.",
+        }
+
     records = _get_visit_records_from_state(tool_context)
 
     visit_id = _get_next_visit_id()
@@ -288,6 +308,7 @@ def store_visit_record(
 
     return {
         "status": "success",
+        "source": "mock",
         "visit_id": visit_id,
         "visit_date": visit_date,
         "doctor_name": doctor_name or "Unknown",
@@ -325,6 +346,25 @@ def search_medical_history(
     })
     tool_context.state["search_log"] = search_log
 
+    sql = """SELECT id as visit_id, visit_date, doctor_name, hospital_name, structured_summary as summary
+             FROM visit_records
+             WHERE patient_id = :pid AND (structured_summary ILIKE :q OR key_findings::text ILIKE :q)
+             ORDER BY visit_date DESC
+             LIMIT :lim"""
+    db_rows = query_dict(sql, {"pid": patient_id, "q": f"%{query}%", "lim": top_k})
+    if db_rows:
+        for tuple_row in db_rows:
+            tuple_row["visit_id"] = str(tuple_row["visit_id"])
+            if hasattr(tuple_row["visit_date"], "isoformat"):
+                tuple_row["visit_date"] = tuple_row["visit_date"].isoformat()
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "query": query,
+            "results_count": len(db_rows),
+            "results": db_rows,
+        }
+
     records = _get_visit_records_from_state(tool_context)
 
     # 해당 환자의 레코드만 필터 / Filter records for this patient
@@ -351,6 +391,7 @@ def search_medical_history(
 
     return {
         "status": "success",
+        "source": "mock",
         "query": query,
         "results_count": len(results),
         "results": results,
@@ -372,6 +413,21 @@ def get_upcoming_appointments(
     Returns:
         dict with "status", "appointment_count", and "appointments" list.
     """
+    sql = "SELECT * FROM appointments WHERE patient_id = :pid AND status = 'scheduled' ORDER BY scheduled_date"
+    db_rows = query_dict(sql, {"pid": patient_id})
+    if db_rows:
+        for tuple_row in db_rows:
+            if hasattr(tuple_row.get("scheduled_date"), "isoformat"):
+                tuple_row["date"] = tuple_row["scheduled_date"].strftime("%Y-%m-%d")
+                tuple_row["time"] = tuple_row["scheduled_date"].strftime("%H:%M")
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "appointment_count": len(db_rows),
+            "appointments": db_rows,
+        }
+
     # state에서 예약 로드 또는 mock 사용 / Load from state or use mocks
     appointments = tool_context.state.get("medical_info_appointments")
     if appointments is None:
@@ -386,6 +442,7 @@ def get_upcoming_appointments(
 
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "appointment_count": len(patient_apts),
         "appointments": patient_apts,
@@ -407,6 +464,20 @@ def get_health_metrics(
     Returns:
         dict with "status", "metric_count", and "metrics" list.
     """
+    sql = "SELECT * FROM health_metrics WHERE patient_id = :pid ORDER BY measured_at DESC"
+    db_rows = query_dict(sql, {"pid": patient_id})
+    if db_rows:
+        for r in db_rows:
+            if hasattr(r.get("measured_at"), "isoformat"):
+                r["measured_at"] = r["measured_at"].isoformat()
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "metric_count": len(db_rows),
+            "metrics": db_rows,
+        }
+
     metrics = tool_context.state.get("health_metrics")
     if metrics is None:
         metrics = [m.copy() for m in _MOCK_HEALTH_METRICS]
@@ -419,6 +490,7 @@ def get_health_metrics(
 
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "metric_count": len(patient_metrics),
         "metrics": patient_metrics,
@@ -450,6 +522,7 @@ def get_health_metrics_by_type(
 
     return {
         "status": "success",
+        "source": all_result.get("source", "mock"),
         "patient_id": patient_id,
         "metric_type": metric_type,
         "metric_count": len(filtered),
@@ -480,6 +553,24 @@ def save_health_insight(
     Returns:
         dict with "status", "insight_id", and created insight details.
     """
+    sql = """INSERT INTO health_insights (patient_id, insight_type, severity, title, content)
+             VALUES (:pid, :itype, :sev, :tit, :con)
+             RETURNING id"""
+    db_rows = execute_write(sql, {
+        "pid": patient_id, "itype": insight_type, "sev": severity,
+        "tit": title, "con": content
+    })
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "insight_id": str(db_rows[0]["id"]),
+            "insight_type": insight_type,
+            "severity": severity,
+            "title": title,
+            "message": f"Health insight '{title}' saved ({severity}).",
+        }
+
     insights = tool_context.state.get("health_insights", [])
 
     insight_id = _get_next_insight_id()
@@ -497,6 +588,7 @@ def save_health_insight(
 
     return {
         "status": "success",
+        "source": "mock",
         "insight_id": insight_id,
         "insight_type": insight_type,
         "severity": severity,
@@ -529,6 +621,25 @@ def send_caregiver_notification(
     Returns:
         dict with "status", "notification_id", and delivery details.
     """
+    sql = """INSERT INTO notifications (patient_id, caregiver_id, type, delivery_method, content, status)
+             VALUES (:pid, (SELECT caregiver_id FROM patients WHERE id = :pid LIMIT 1),
+                     :ntype, 'email', :con::jsonb, 'sent')
+             RETURNING id, (SELECT name FROM caregivers c WHERE c.id = (SELECT caregiver_id FROM patients WHERE id = :pid LIMIT 1)) as cg_name"""
+    db_rows = execute_write(sql, {
+        "pid": patient_id, "ntype": notification_type,
+        "con": json.dumps({"subject": subject, "body": message})
+    })
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "notification_id": str(db_rows[0]["id"]),
+            "caregiver_name": db_rows[0].get("cg_name", "Unknown"),
+            "notification_type": notification_type,
+            "delivery_status": "sent (mock config)",
+            "message": f"Notification sent to {db_rows[0].get('cg_name', 'Unknown')}: [{notification_type}] {subject}",
+        }
+
     notif_log = tool_context.state.get("notification_log", [])
 
     notif_id = _get_next_notif_id()
@@ -549,6 +660,7 @@ def send_caregiver_notification(
 
     return {
         "status": "success",
+        "source": "mock",
         "notification_id": notif_id,
         "caregiver_name": caregiver.get("name", "Unknown"),
         "notification_type": notification_type,
@@ -575,10 +687,25 @@ def get_caregiver_info(
     Returns:
         dict with "status" and caregiver details (name, relationship, contact info).
     """
+    sql = """SELECT c.* FROM caregivers c 
+             JOIN patients p ON p.caregiver_id = c.id
+             WHERE p.id = :pid"""
+    db_rows = query_dict(sql, {"pid": patient_id})
+    if db_rows:
+        c = dict(db_rows[0])
+        c["id"] = str(c["id"])
+        c["created_at"] = str(c["created_at"]) if c.get("created_at") else None
+        return {
+            "status": "found",
+            "source": "alloydb",
+            **c
+        }
+
     caregiver = _MOCK_CAREGIVER.get(patient_id)
     if caregiver:
         return {
             "status": "found",
+            "source": "mock",
             **caregiver,
         }
 

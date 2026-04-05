@@ -31,3 +31,7 @@ test_result.txt
 # pytest
 .pytest_cache/
 .coverage
+
+# Local binaries
+tools/
+*.exe

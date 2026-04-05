@@ -14,6 +14,7 @@ Production note / 프로덕션 참고:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import ssl
 import urllib.request
@@ -23,6 +24,11 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from google.adk.tools.tool_context import ToolContext
+
+# AlloyDB 우선 조회용 공용 헬퍼 / Shared helper for AlloyDB-first lookups
+from careflow.db.alloydb_client import query_dict
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # API 설정 / API Configuration
@@ -148,8 +154,72 @@ def get_patient_medications(patient_id: str, tool_context: ToolContext) -> dict:
     Returns:
         A dict containing current_medications list and recent_changes list.
     """
-    # 상태 저장 — 이후 도구 호출에서 참조 가능
-    # Persist to state so downstream tools/agent can reference
+    # ---------------------------------------------------------------
+    # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
+    # 현재 약물 + 최근 처방 변경 사항을 두 쿼리로 조회
+    # Fetch current medications and recent changes via two queries.
+    # ---------------------------------------------------------------
+    # 실제 스키마: medications(id, name, dosage, frequency, timing, status, prescribed_date, ...)
+    # `condition` 컬럼은 스키마에 없으므로 제거
+    # Actual schema: medications(...); no `condition` column — dropped.
+    current_rows = query_dict(
+        """
+        SELECT id, name, dosage, frequency, timing, status, prescribed_date
+        FROM medications
+        WHERE patient_id = :pid
+        ORDER BY prescribed_date DESC
+        """,
+        {"pid": patient_id},
+    )
+    if current_rows:
+        # 날짜 직렬화 / Serialize date fields
+        for row in current_rows:
+            if hasattr(row.get("prescribed_date"), "strftime"):
+                row["prescribed_date"] = row["prescribed_date"].strftime("%Y-%m-%d")
+
+        # medication_changes 실제 스키마:
+        #   (medication_id, patient_id, change_type, previous_dosage, new_dosage, reason, changed_at)
+        # Actual schema of medication_changes uses previous_dosage/new_dosage/changed_at.
+        change_rows = query_dict(
+            """
+            SELECT mc.medication_id, m.name AS medication, mc.change_type,
+                   mc.previous_dosage AS from_dosage,
+                   mc.new_dosage AS to_dosage,
+                   mc.changed_at AS change_date,
+                   mc.reason
+            FROM medication_changes mc
+            LEFT JOIN medications m ON m.id = mc.medication_id
+            WHERE mc.patient_id = :pid
+              AND mc.changed_at >= NOW() - INTERVAL '90 days'
+            ORDER BY mc.changed_at DESC
+            """,
+            {"pid": patient_id},
+        )
+        # 날짜 직렬화 / Serialize change_date
+        for row in change_rows:
+            if hasattr(row.get("change_date"), "strftime"):
+                row["change_date"] = row["change_date"].strftime("%Y-%m-%d")
+
+        db_data = {
+            "current_medications": current_rows,
+            "recent_changes": change_rows,
+        }
+        logger.info(
+            f"symptom.get_patient_medications.from_db: "
+            f"{len(current_rows)} meds, {len(change_rows)} changes"
+        )
+        tool_context.state["patient_medications"] = db_data
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            **db_data,
+        }
+
+    # ---------------------------------------------------------------
+    # 2단계: mock 데이터 fallback / Step 2: Fallback to mock data
+    # ---------------------------------------------------------------
+    logger.info("symptom.get_patient_medications.fallback_to_mock")
     data = _MOCK_MEDICATIONS.get(patient_id)
     if data is None:
         return {
@@ -160,6 +230,7 @@ def get_patient_medications(patient_id: str, tool_context: ToolContext) -> dict:
     tool_context.state["patient_medications"] = data
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         **data,
     }
@@ -188,6 +259,13 @@ def get_adherence_history(patient_id: str, days: int, tool_context: ToolContext)
     Returns:
         A dict containing adherence records, total doses, missed count, and adherence rate.
     """
+    # ---------------------------------------------------------------
+    # 참고: AlloyDB 스키마에는 medication_adherence 테이블이 없으므로
+    #      mock 데이터만 사용합니다.
+    # Note: AlloyDB schema has no `medication_adherence` table; serve
+    #       from the mock fallback only.
+    # ---------------------------------------------------------------
+    logger.info("symptom.adherence.mock_only")
     records = _MOCK_ADHERENCE.get(patient_id)
     if records is None:
         return {
@@ -198,6 +276,7 @@ def get_adherence_history(patient_id: str, days: int, tool_context: ToolContext)
     # 지정된 기간 내 기록만 필터링 / Filter records within the requested window
     cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     filtered = [r for r in records if r["date"] >= cutoff_date]
+    source = "mock"
 
     total_doses = len(filtered)
     missed_doses = sum(1 for r in filtered if not r["taken"])
@@ -205,6 +284,7 @@ def get_adherence_history(patient_id: str, days: int, tool_context: ToolContext)
 
     result = {
         "status": "success",
+        "source": source,
         "patient_id": patient_id,
         "period_days": days,
         "records": filtered,
@@ -239,6 +319,75 @@ def get_recent_health_metrics(patient_id: str, tool_context: ToolContext) -> dic
     Returns:
         A dict containing latest health metric values and trends.
     """
+    # ---------------------------------------------------------------
+    # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
+    # 실제 스키마에 trend 컬럼이 없으므로, 최신값과 7일 평균을 각각
+    # 단순 쿼리 2개로 조회한 뒤 병합합니다.
+    # The real schema has no `trend` column — fetch latest values and
+    # 7-day averages via two simple queries and merge the results.
+    # ---------------------------------------------------------------
+    latest_rows = query_dict(
+        """
+        SELECT DISTINCT ON (metric_type)
+            metric_type, value_primary, value_secondary, unit, measured_at
+        FROM health_metrics
+        WHERE patient_id = :pid
+        ORDER BY metric_type, measured_at DESC
+        """,
+        {"pid": patient_id},
+    )
+    if latest_rows:
+        # 7일 평균은 별도 쿼리로 / Fetch 7-day averages as a separate query
+        avg_rows = query_dict(
+            """
+            SELECT metric_type, AVG(value_primary) AS avg_7d
+            FROM health_metrics
+            WHERE patient_id = :pid
+              AND measured_at >= NOW() - INTERVAL '7 days'
+            GROUP BY metric_type
+            """,
+            {"pid": patient_id},
+        )
+        avg_map = {
+            r["metric_type"]: r.get("avg_7d") for r in (avg_rows or [])
+        }
+
+        logger.info(f"symptom.health_metrics.from_db: {len(latest_rows)} metrics")
+        metrics: dict[str, Any] = {}
+        for row in latest_rows:
+            mtype = row["metric_type"]
+            measured_at = row.get("measured_at")
+            if hasattr(measured_at, "isoformat"):
+                measured_at = measured_at.isoformat()
+            entry = {
+                "latest_value": row.get("value_primary"),
+                "unit": row.get("unit"),
+                "measured_at": measured_at,
+                # trend 컬럼이 스키마에 없음 — 기본값 "unknown"
+                # No `trend` column in schema — default to "unknown".
+                "trend": "unknown",
+            }
+            if avg_map.get(mtype) is not None:
+                entry["last_7_days_avg"] = round(float(avg_map[mtype]), 1)
+            # blood_pressure는 systolic/diastolic 분리 표현
+            # For blood pressure, expose systolic/diastolic explicitly.
+            if mtype == "blood_pressure":
+                entry["systolic"] = row.get("value_primary")
+                entry["diastolic"] = row.get("value_secondary")
+            metrics[mtype] = entry
+
+        tool_context.state["health_metrics"] = metrics
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "metrics": metrics,
+        }
+
+    # ---------------------------------------------------------------
+    # 2단계: mock 데이터 fallback / Step 2: Fallback to mock data
+    # ---------------------------------------------------------------
+    logger.info("symptom.health_metrics.fallback_to_mock")
     metrics = _MOCK_HEALTH_METRICS.get(patient_id)
     if metrics is None:
         return {
@@ -249,6 +398,7 @@ def get_recent_health_metrics(patient_id: str, tool_context: ToolContext) -> dic
     tool_context.state["health_metrics"] = metrics
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "metrics": metrics,
     }

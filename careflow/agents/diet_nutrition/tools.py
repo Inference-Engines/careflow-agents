@@ -20,6 +20,7 @@ Tools:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import ssl
 import urllib.request
@@ -28,6 +29,11 @@ import urllib.parse
 from typing import Any
 
 from google.adk.tools import ToolContext
+
+# AlloyDB 우선 조회용 공용 헬퍼 / Shared helper for AlloyDB-first lookups
+from careflow.db.alloydb_client import query_dict
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # USDA FoodData Central API 설정 / USDA API Configuration
@@ -318,6 +324,35 @@ def get_patient_medications(patient_id: str, tool_context: ToolContext) -> dict:
     Returns:
         dict with 'medications' list or 'error' message.
     """
+    # ---------------------------------------------------------------
+    # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
+    # ---------------------------------------------------------------
+    # 실제 스키마: medications(name, dosage, frequency, timing, status, ...)
+    # purpose 컬럼은 스키마에 존재하지 않으므로 제거
+    # Actual schema: medications(name, dosage, frequency, timing, status, ...)
+    # `purpose` column does not exist in schema, so it has been removed.
+    db_rows = query_dict(
+        """
+        SELECT name AS drug_name, dosage, frequency, timing, status
+        FROM medications
+        WHERE patient_id = :pid
+        ORDER BY name ASC
+        """,
+        {"pid": patient_id},
+    )
+    if db_rows:
+        logger.info(f"diet.get_patient_medications.from_db: {len(db_rows)} rows")
+        return {
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "medications": db_rows,
+            "count": len(db_rows),
+        }
+
+    # ---------------------------------------------------------------
+    # 2단계: mock 데이터 fallback / Step 2: Fallback to mock data
+    # ---------------------------------------------------------------
+    logger.info("diet.get_patient_medications.fallback_to_mock")
     medications = _MOCK_MEDICATIONS.get(patient_id)
     if medications is None:
         return {
@@ -325,6 +360,7 @@ def get_patient_medications(patient_id: str, tool_context: ToolContext) -> dict:
             "medications": [],
         }
     return {
+        "source": "mock",
         "patient_id": patient_id,
         "medications": medications,
         "count": len(medications),
@@ -342,6 +378,13 @@ def get_dietary_restrictions(patient_id: str, tool_context: ToolContext) -> dict
     Returns:
         dict with conditions, restrictions, allergies, and locale.
     """
+    # ---------------------------------------------------------------
+    # 참고: AlloyDB 스키마에는 dietary_restrictions 테이블이 없으므로
+    #      mock 데이터만 사용합니다.
+    # Note: AlloyDB schema has no `dietary_restrictions` table, so we
+    #       serve from the mock fallback only.
+    # ---------------------------------------------------------------
+    logger.info("diet.get_dietary_restrictions.mock_only")
     restrictions = _MOCK_DIETARY_RESTRICTIONS.get(patient_id)
     if restrictions is None:
         return {
@@ -351,7 +394,7 @@ def get_dietary_restrictions(patient_id: str, tool_context: ToolContext) -> dict
             "allergies": [],
             "locale": "unknown",
         }
-    return {"patient_id": patient_id, **restrictions}
+    return {"source": "mock", "patient_id": patient_id, **restrictions}
 
 
 def _query_usda_api(food_name: str) -> dict[str, Any] | None:

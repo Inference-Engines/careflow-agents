@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 from google.adk.tools import ToolContext
+from careflow.db.alloydb_client import query_dict, execute_write
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +225,17 @@ def get_current_medications(
     Returns:
         dict with "status", "patient_id", "medication_count", and "medications" list.
     """
+    sql = "SELECT * FROM medications WHERE patient_id = :pid AND status = 'active'"
+    db_rows = query_dict(sql, {"pid": patient_id})
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "medication_count": len(db_rows),
+            "medications": db_rows,
+        }
+
     medications = _get_medications_from_state(tool_context)
 
     patient_meds = [
@@ -233,6 +245,7 @@ def get_current_medications(
 
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "medication_count": len(patient_meds),
         "medications": patient_meds,
@@ -267,6 +280,25 @@ def add_medication(
     Returns:
         dict with "status", "medication_id", and created medication details.
     """
+    sql = """INSERT INTO medications (patient_id, name, dosage, frequency, timing, status, prescribed_date, notes)
+             VALUES (:pid, :name, :dos, :freq, :tim, 'active', CURRENT_DATE, :notes)
+             RETURNING id"""
+    db_rows = execute_write(sql, {
+        "pid": patient_id, "name": name, "dos": dosage, 
+        "freq": frequency, "tim": timing, "notes": notes or ""
+    })
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "medication_id": str(db_rows[0]["id"]),
+            "name": name,
+            "dosage": dosage,
+            "frequency": frequency,
+            "timing": timing,
+            "message": f"Medication '{name} {dosage}' added successfully.",
+        }
+
     medications = _get_medications_from_state(tool_context)
 
     med_id = _get_next_med_id()
@@ -286,6 +318,7 @@ def add_medication(
 
     return {
         "status": "success",
+        "source": "mock",
         "medication_id": med_id,
         "name": name,
         "dosage": dosage,
@@ -318,6 +351,33 @@ def update_medication_status(
     Returns:
         dict with "status", updated medication details, and "message".
     """
+    sql = """UPDATE medications
+             SET status = :status,
+                 dosage = COALESCE(:dosage, dosage),
+                 frequency = COALESCE(:frequency, frequency),
+                 timing = COALESCE(:timing, timing),
+                 updated_at = NOW()
+             WHERE id = :mid
+             RETURNING id, name, dosage, frequency, timing, status"""
+    db_rows = execute_write(sql, {
+        "status": new_status, "dosage": new_dosage,
+        "frequency": new_frequency, "timing": new_timing,
+        "mid": medication_id
+    })
+    if db_rows:
+        row = db_rows[0]
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "medication_id": str(row["id"]),
+            "previous": "unknown (db updated)",
+            "updated": {
+                "dosage": row.get("dosage"), "frequency": row.get("frequency"),
+                "timing": row.get("timing"), "status": row.get("status")
+            },
+            "message": f"Medication '{row.get('name')}' updated to {new_status}."
+        }
+
     medications = _get_medications_from_state(tool_context)
 
     target = None
@@ -352,6 +412,7 @@ def update_medication_status(
 
     return {
         "status": "success",
+        "source": "mock",
         "medication_id": medication_id,
         "previous": previous,
         "updated": {
@@ -387,6 +448,24 @@ def log_medication_change(
     Returns:
         dict with "status" and change log details.
     """
+    sql = """INSERT INTO medication_changes 
+             (medication_id, patient_id, change_type, previous_dosage, new_dosage, reason, changed_by)
+             VALUES (:mid, (SELECT patient_id FROM medications WHERE id = :mid LIMIT 1),
+                     :ctype, :pdos, :ndos, :rsn, 'task_agent')
+             RETURNING id"""
+    db_rows = execute_write(sql, {
+        "mid": medication_id, "ctype": change_type, "pdos": previous_dosage or None,
+        "ndos": new_dosage or None, "rsn": reason or ""
+    })
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "change_type": change_type,
+            "medication_id": medication_id,
+            "message": f"Change logged: {change_type} for {medication_id}.",
+        }
+
     change_log = tool_context.state.get("medication_change_log", [])
     entry = {
         "medication_id": medication_id,
@@ -401,6 +480,7 @@ def log_medication_change(
 
     return {
         "status": "success",
+        "source": "mock",
         "change_type": change_type,
         "medication_id": medication_id,
         "message": f"Change logged: {change_type} for {medication_id}.",
@@ -526,6 +606,25 @@ def create_task(
     Returns:
         dict with "status", "task_id", and created task details.
     """
+    sql = """INSERT INTO tasks (patient_id, description, due_date, priority, status, created_by_agent)
+             VALUES (:pid, :desc, :due, :prio, 'pending', 'task_agent')
+             RETURNING id"""
+    due_val = due_date if due_date else None
+    db_rows = execute_write(sql, {
+        "pid": patient_id, "desc": description + (f" (Notes: {notes})" if notes else ""),
+        "due": due_val, "prio": priority
+    })
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "task_id": str(db_rows[0]["id"]),
+            "description": description,
+            "due_date": due_date,
+            "priority": priority,
+            "message": f"Task created: '{description}' due {due_date} (priority: {priority}).",
+        }
+
     tasks = tool_context.state.get("tasks", [])
 
     task_id = _get_next_task_id()
@@ -545,6 +644,7 @@ def create_task(
 
     return {
         "status": "success",
+        "source": "mock",
         "task_id": task_id,
         "description": description,
         "due_date": due_date,
@@ -568,6 +668,18 @@ def get_pending_tasks(
     Returns:
         dict with "status", "patient_id", "task_count", and "tasks" list.
     """
+    sql = """SELECT * FROM tasks WHERE patient_id = :pid AND status IN ('pending', 'overdue')
+             ORDER BY CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, due_date"""
+    db_rows = query_dict(sql, {"pid": patient_id})
+    if db_rows:
+        return {
+            "status": "success",
+            "source": "alloydb",
+            "patient_id": patient_id,
+            "task_count": len(db_rows),
+            "tasks": db_rows,
+        }
+
     tasks = tool_context.state.get("tasks", [])
 
     # 해당 환자의 대기 태스크만 필터 / Filter pending tasks for this patient
@@ -583,6 +695,7 @@ def get_pending_tasks(
 
     return {
         "status": "success",
+        "source": "mock",
         "patient_id": patient_id,
         "task_count": len(pending),
         "tasks": pending,
