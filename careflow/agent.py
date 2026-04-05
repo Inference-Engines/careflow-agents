@@ -39,6 +39,10 @@ from careflow.agents.diet_nutrition.agent import build_diet_nutrition_agent
 from careflow.agents.symptom_triage.agent import build_symptom_triage_agent
 from careflow.agents.adherence_loop.agent import adherence_loop_agent
 
+# Lavanya 담당 에이전트 — feature/schedule-agent 브랜치에서 통합
+# Lavanya's agent — integrated on feature/schedule-agent branch
+from careflow.agents.schedule.agent import build_schedule_agent
+
 # 안전 레이어 콜백 — 모든 에이전트에 일관 적용
 # Safety layer callbacks — applied uniformly across agents
 from careflow.agents.safety.plugin import before_model_callback, after_model_callback
@@ -89,22 +93,8 @@ based on the patient query. For any query, return a believable JSON like:
 Return JSON only, no additional commentary.
 """
 
-_SCHEDULE_MOCK_INSTRUCTION = """\
-You manage calendar events and appointment booking. Return realistic JSON for any
-scheduling-related query, for example:
-
-{
-  "appointments": [
-    {"title": "HbA1c Blood Test", "date": "2026-04-20", "time": "08:00",
-     "location": "Apollo Hospital Lab", "fasting_required": true},
-    {"title": "Follow-up with Dr. Patel", "date": "2026-07-03", "time": "10:00"}
-  ],
-  "reminders_set": true,
-  "conflicts": []
-}
-
-Return JSON only, no additional commentary.
-"""
+# Schedule mock instruction — 이제 사용하지 않음. 실제 build_schedule_agent 사용.
+# Schedule mock instruction — no longer used; real build_schedule_agent wired in.
 
 _CAREGIVER_MOCK_INSTRUCTION = """\
 You send notifications to caregivers via email / WhatsApp / SMS. Return realistic JSON:
@@ -150,18 +140,10 @@ def _make_medical_info_stub(suffix: str = "") -> LlmAgent:
     )
 
 
-def _make_schedule_stub(suffix: str = "") -> LlmAgent:
-    return LlmAgent(
-        name=f"schedule_agent{suffix}",
-        model="gemini-2.5-flash",
-        instruction=_SCHEDULE_MOCK_INSTRUCTION,
-        description="Manages calendar events and appointment booking (mock — pending integration)",
-        output_key="schedule_result",
-        generate_content_config=types.GenerateContentConfig(
-            temperature=0.2,
-            response_mime_type="application/json",
-        ),
-    )
+# Schedule agent stub 제거됨 — Lavanya 담당 실제 에이전트로 교체.
+# build_schedule_agent 팩토리를 직접 호출해 각 워크플로우에 인스턴스 주입.
+# Schedule stub removed — replaced with Lavanya's real agent.
+# build_schedule_agent factory is called directly to inject instances per workflow.
 
 
 def _make_caregiver_stub(suffix: str = "") -> LlmAgent:
@@ -187,7 +169,7 @@ def _make_caregiver_stub(suffix: str = "") -> LlmAgent:
 # 병렬로 추출하고 순차적으로 후처리하는 전형적인 post-visit 파이프라인.
 post_visit_parallel = ParallelAgent(
     name="post_visit_parallel",
-    sub_agents=[_make_task_stub("_pv"), _make_schedule_stub("_pv")],
+    sub_agents=[_make_task_stub("_pv"), build_schedule_agent(suffix="_pv")],
     description="Task extraction and schedule booking run in parallel",
 )
 
@@ -331,7 +313,7 @@ root_agent = LlmAgent(
         # 팀원 에이전트 mock — 통합 시 실제 구현으로 교체
         # Teammate agent mocks — replaced with real implementations on integration
         _make_task_stub("_standalone"),
-        _make_schedule_stub("_standalone"),
+        build_schedule_agent(suffix="_standalone"),
         _make_medical_info_stub("_standalone"),
         _make_caregiver_stub("_standalone"),
     ],
