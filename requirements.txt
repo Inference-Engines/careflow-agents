@@ -1,0 +1,10 @@
+# CareFlow Agents — Python dependencies
+# CareFlow 에이전트 Python 의존성
+
+# Google ADK (Agent Development Kit)
+google-adk>=0.2.0
+
+# AlloyDB / PostgreSQL connectivity (AlloyDB first, mock fallback)
+# AlloyDB / PostgreSQL 연결용 — 미설치 시 mock 데이터로 자동 fallback
+sqlalchemy>=2.0.0
+pg8000>=1.30.0
