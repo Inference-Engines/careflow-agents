@@ -1,0 +1,42 @@
+{
+  "diabetes_type2": {
+    "code": "5A11",
+    "title": "Type 2 diabetes mellitus"
+  },
+  "hypertension": {
+    "code": "BA00",
+    "title": "Essential hypertension"
+  },
+  "hypoglycemia": {
+    "code": "5A40",
+    "title": "Hypoglycaemia"
+  },
+  "dizziness": {
+    "code": "MB48.0",
+    "title": "Dizziness"
+  },
+  "chest_pain": {
+    "code": "MD30",
+    "title": "Chest pain"
+  },
+  "headache": {
+    "code": "MG31",
+    "title": "Headache"
+  },
+  "nausea": {
+    "code": "MD90",
+    "title": "Nausea"
+  },
+  "fatigue": {
+    "code": "MG22",
+    "title": "Fatigue"
+  },
+  "tremor": {
+    "code": "MB48.1",
+    "title": "Tremor"
+  },
+  "dyspnea": {
+    "code": "MD11",
+    "title": "Dyspnoea"
+  }
+}

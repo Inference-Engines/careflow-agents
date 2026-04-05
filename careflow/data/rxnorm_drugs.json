@@ -1,0 +1,17 @@
+{
+  "metformin": {
+    "rxcui": "6809"
+  },
+  "amlodipine": {
+    "rxcui": "17767"
+  },
+  "aspirin": {
+    "rxcui": "1191"
+  },
+  "atorvastatin": {
+    "rxcui": "83367"
+  },
+  "lisinopril": {
+    "rxcui": "29046"
+  }
+}

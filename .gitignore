@@ -1,0 +1,33 @@
+# 데이터셋 (별도 레포)
+datasets/
+
+# 파이썬
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 환경변수 / API 키
+.env
+.env.local
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# ADK 캐시
+.adk/
+**/.adk/
+test_result.txt
+
+# pytest
+.pytest_cache/
+.coverage
