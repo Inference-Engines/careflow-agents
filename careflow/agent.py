@@ -39,6 +39,10 @@ from careflow.agents.diet_nutrition.agent import build_diet_nutrition_agent
 from careflow.agents.symptom_triage.agent import build_symptom_triage_agent
 from careflow.agents.adherence_loop.agent import adherence_loop_agent
 
+# Deeptesha 담당 에이전트 — feature/caregiver-agent 브랜치에서 통합
+# Deeptesha's agent — integrated on feature/caregiver-agent branch
+from careflow.agents.caregiver.agent import build_caregiver_agent
+
 # 안전 레이어 콜백 — 모든 에이전트에 일관 적용
 # Safety layer callbacks — applied uniformly across agents
 from careflow.agents.safety.plugin import before_model_callback, after_model_callback
@@ -106,20 +110,10 @@ scheduling-related query, for example:
 Return JSON only, no additional commentary.
 """
 
-_CAREGIVER_MOCK_INSTRUCTION = """\
-You send notifications to caregivers via email / WhatsApp / SMS. Return realistic JSON:
-
-{
-  "event_type": "VISIT_UPDATE",
-  "caregiver": "Priya Sharma (daughter)",
-  "channels_sent": ["email", "whatsapp"],
-  "subject": "[CareFlow] Father's visit update — Metformin dosage changed",
-  "short_message": "Hi Priya, your father's Metformin was increased to 1000mg today. HbA1c test booked for 2026-04-20.",
-  "delivery_status": "sent"
-}
-
-Return JSON only, no additional commentary.
-"""
+# Caregiver mock instruction 제거됨 — Deeptesha 담당 실제 에이전트로 교체.
+# build_caregiver_agent 팩토리를 직접 호출해 각 워크플로우에 인스턴스 주입.
+# Caregiver mock removed — replaced with Deeptesha's real agent.
+# build_caregiver_agent factory is called directly per workflow.
 
 
 def _make_task_stub(suffix: str = "") -> LlmAgent:
@@ -164,18 +158,8 @@ def _make_schedule_stub(suffix: str = "") -> LlmAgent:
     )
 
 
-def _make_caregiver_stub(suffix: str = "") -> LlmAgent:
-    return LlmAgent(
-        name=f"caregiver_agent{suffix}",
-        model="gemini-2.5-flash",
-        instruction=_CAREGIVER_MOCK_INSTRUCTION,
-        description="Sends notifications to caregivers via email/WhatsApp (mock — pending integration)",
-        output_key="caregiver_result",
-        generate_content_config=types.GenerateContentConfig(
-            temperature=0.2,
-            response_mime_type="application/json",
-        ),
-    )
+# Caregiver stub 제거됨 — Deeptesha 담당 실제 에이전트를 build_caregiver_agent 로 직접 호출.
+# Caregiver stub removed — Deeptesha's real agent is wired via build_caregiver_agent.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -197,7 +181,7 @@ post_visit_sequential = SequentialAgent(
         post_visit_parallel,
         _make_medical_info_stub("_pv"),
         build_diet_nutrition_agent(suffix="_pv"),
-        _make_caregiver_stub("_pv"),
+        build_caregiver_agent(suffix="_pv"),
     ],
     description="Full post-visit workflow: parallel extract → medical info → diet → caregiver",
 )
@@ -217,7 +201,7 @@ symptom_workflow = SequentialAgent(
     name="symptom_workflow",
     sub_agents=[
         build_symptom_triage_agent(suffix="_sym"),
-        _make_caregiver_stub("_sym"),
+        build_caregiver_agent(suffix="_sym"),
     ],
     description="Symptom triage followed by caregiver escalation when needed",
 )
@@ -333,7 +317,7 @@ root_agent = LlmAgent(
         _make_task_stub("_standalone"),
         _make_schedule_stub("_standalone"),
         _make_medical_info_stub("_standalone"),
-        _make_caregiver_stub("_standalone"),
+        build_caregiver_agent(suffix="_standalone"),
     ],
     generate_content_config=types.GenerateContentConfig(
         temperature=0.3,
