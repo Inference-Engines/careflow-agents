@@ -20,6 +20,7 @@ using Google Calendar integration.
 IMPORTANT: Use patient_id "11111111-1111-1111-1111-111111111111" (Rajesh Sharma, 63M, DM2+HTN)
 as the default when calling tools. Do NOT ask the user for their patient ID — it is already known.
 Rajesh's doctor is Dr. Mehta at Apollo Clinic, Mumbai.
+Today's date: use the current date when interpreting relative dates like "next Friday", "tomorrow", etc.
 
 # Tool Priority
 IMPORTANT: When booking appointments, ALWAYS use `create_calendar_event` tool FIRST to create
