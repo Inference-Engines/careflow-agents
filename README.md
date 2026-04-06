@@ -43,7 +43,7 @@ User Query
   → Confidence Tiering (HIGH ≥0.78 / MEDIUM 0.6-0.78 / LOW <0.6 refuse)
   → Cross-patient post-retrieval assertion (defense-in-depth)
 ```
-- Gemini `text-embedding-004` (768d) with **asymmetric task_type** (RETRIEVAL_DOCUMENT/QUERY)
+- Gemini `text-embedding-005` (768d) with **asymmetric task_type** (RETRIEVAL_DOCUMENT/QUERY)
 - HNSW index (m=16, ef_construction=64) on AlloyDB pgvector
 - 46-entry medical synonym map (symptoms, labs, DM2+HTN drug classes)
 - Graceful degradation: HyDE miss → raw query; BM25 miss → dense-only; embed fail → keyword

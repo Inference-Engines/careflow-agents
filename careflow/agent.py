@@ -1,21 +1,17 @@
-"""CareFlow Root Agent — 전체 오케스트레이터 (뼈대 단독 버전).
+"""CareFlow Root Agent — 전체 오케스트레이터.
 
 ADK 진입점. `adk web` 또는 `adk run`으로 실행 시 이 파일의 `root_agent` 변수를
-자동으로 로드한다. 현재 커밋은 Somi 담당 서브에이전트 4개 + 안전 레이어만 포함하며,
-Task / Medical Info / Schedule / Caregiver 에이전트는 stub 으로 남겨둔다 —
-이후 팀원 코드를 ADK 패턴으로 리팩토링해서 해당 stub 을 교체하는 방식으로 통합한다.
+자동으로 로드한다. 8개 서브에이전트 + 안전 레이어 + MCP 통합 완료.
 
-Somi's agents (all implemented):
-    - health_insight_agent   : trend analysis, proactive insights
+All 8 sub-agents (fully implemented):
+    - health_insight_agent   : trend analysis, proactive insights (AlloyDB)
     - diet_nutrition_agent   : personalized diet + food-drug interaction
     - symptom_triage_agent   : 3-level urgency classification, safe defaults
     - adherence_loop_agent   : LoopAgent — daily medication monitoring
-
-Teammate agents (stubbed — to be replaced during integration):
-    - task_agent         (thatengineerguy)
-    - schedule_agent     (Lavanya)
-    - medical_info_agent (thatengineerguy)
-    - caregiver_agent    (Deeptesha)
+    - task_agent             : medication extraction + openFDA 3-layer DDI
+    - schedule_agent         : appointment booking + Google Calendar MCP
+    - medical_info_agent     : Agentic RAG (HyDE+Hybrid+RRF+Self-RAG)
+    - caregiver_agent        : caregiver notifications + Gmail MCP
 
 ADK single-parent constraint: 모든 워크플로우용 인스턴스는 팩토리로 매번 새로
 생성한다. 동일 인스턴스를 여러 parent 아래에 두면 런타임 에러가 난다.
