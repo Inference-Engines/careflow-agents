@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # 기본값은 로컬 개발 환경(localhost:5000).
 # Default points to local dev server.
 # ---------------------------------------------------------------------------
-_TOOLBOX_URL: str = os.getenv("TOOLBOX_URL", "http://127.0.0.1:5000")
+_TOOLBOX_URL: str = os.getenv("TOOLBOX_SERVER_URL", "http://127.0.0.1:5000")
 
 # ---------------------------------------------------------------------------
 # Module-level cache — avoid re-creating toolsets for the same name.

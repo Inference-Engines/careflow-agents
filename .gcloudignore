@@ -1,0 +1,70 @@
+# .gcloudignore — CareFlow Agents
+# Excludes files from the Cloud Build upload context.
+# Cloud Build only needs the source files, not local tooling.
+# Without this, Cloud Build uploads ~220 MB of garbage on every build.
+#
+# Rule: if it's not needed inside the Docker build, exclude it here.
+
+# ── Python virtual environment (~11 MB) ────────────────────────────────────────
+.venv/
+venv/
+
+# ── Node modules (~208 MB) ─────────────────────────────────────────────────────
+# The Dockerfile Stage 1 runs "npm ci" itself — node_modules is rebuilt inside
+# the build container. Never send the local copy to Cloud Build.
+ui/node_modules/
+
+# ── Frontend build artefacts (rebuilt by Docker Stage 1) ───────────────────────
+ui/dist/
+ui/build/
+
+# ── Python cache ───────────────────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# ── ADK cache ──────────────────────────────────────────────────────────────────
+.adk/
+**/.adk/
+
+# ── pytest ─────────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+
+# ── Local credentials & secrets ────────────────────────────────────────────────
+.env
+.env.local
+*.key
+client_secret*.json
+oauth_token.json
+application_default_credentials.json
+
+# ── Test outputs & large debug files ───────────────────────────────────────────
+output.txt
+test_result.txt
+
+# ── OS / IDE artefacts ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# ── Git ────────────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── Docs (not needed in container) ─────────────────────────────────────────────
+docs/
+DEPLOY.md
+README.md
+
+# ── Database seed files (not needed in container) ──────────────────────────────
+db/
+
+# ── Local toolbox binary (downloaded separately, runs as its own Cloud Run service) ──
+tools/
+toolbox
+toolbox.exe

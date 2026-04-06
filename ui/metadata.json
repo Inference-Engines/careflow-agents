@@ -1,0 +1,7 @@
+{
+    "name": "CareFlow AI",
+    "description": "Autonomous healthcare partner for patients and doctors, providing AI-extracted insights, medication tracking, and caregiver notifications.",
+    "requestFramePermissions": [
+        "microphone"
+    ]
+}

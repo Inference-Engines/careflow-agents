@@ -1,0 +1,40 @@
+#!/bin/bash
+# start.sh — CareFlow single-container startup
+# Runs two processes inside one Cloud Run container:
+#   1. adk api_server  — the ADK agent runtime   (port 8000, internal only)
+#   2. uvicorn server  — FastAPI proxy + React UI (port $PORT, Cloud Run entry)
+
+set -e
+
+echo "========================================="
+echo " CareFlow AI — Single Container Startup"
+echo "========================================="
+
+# ── 1. Start ADK agent server in background ──────────────────────────────────
+echo "[1/2] Starting ADK api_server on 127.0.0.1:8000 ..."
+adk api_server --host 127.0.0.1 --port 8000 /app &
+ADK_PID=$!
+
+# ── 2. Wait for ADK to be ready (max 60 s) ───────────────────────────────────
+echo "Waiting for ADK server to initialize (max 60 s)..."
+for i in $(seq 1 30); do
+    if curl -sf http://127.0.0.1:8000/list-apps > /dev/null 2>&1; then
+        echo "ADK server is ready (attempt $i)."
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo "ERROR: ADK server did not become ready within 60 s. Aborting."
+        kill "$ADK_PID" 2>/dev/null || true
+        exit 1
+    fi
+    sleep 2
+done
+
+# ── 3. Start FastAPI proxy / static UI server ────────────────────────────────
+echo "[2/2] Starting FastAPI proxy + React UI on 0.0.0.0:${PORT:-8080} ..."
+cd /app/ui
+exec uvicorn server:app \
+    --host 0.0.0.0 \
+    --port "${PORT:-8080}" \
+    --workers 2 \
+    --log-level info
