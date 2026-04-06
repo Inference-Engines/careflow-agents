@@ -68,7 +68,7 @@ def _generate_embedding(
             # title adds +3-5% nDCG@10 on structured visit records.
             config.title = title
         result = _embed_client.models.embed_content(
-            model="text-embedding-004",
+            model="text-embedding-005",
             contents=text[:5000],
             config=config,
         )

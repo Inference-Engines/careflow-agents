@@ -20,7 +20,7 @@
 embeddingModels:
   gemini_embedding:
     kind: gemini
-    model: text-embedding-004
+    model: text-embedding-005
     apiKey: ${GOOGLE_API_KEY}
     dimension: 768
 
