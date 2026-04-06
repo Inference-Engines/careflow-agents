@@ -342,6 +342,9 @@ def dispatch_notification(
 ) -> dict:
     """Dispatch a notification through the channels appropriate for the event.
 
+    NOTE: dispatch는 한 이벤트당 1회만 호출되어야 합니다.
+    LLM이 반복 호출하는 것을 방지하기 위해 state에 기록합니다.
+
     Fan-out orchestrator: picks channels based on event_type and invokes the
     corresponding send_* tools. This is the primary tool the agent should use
     for end-to-end delivery. Individual channel tools are only needed for
