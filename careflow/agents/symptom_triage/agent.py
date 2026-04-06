@@ -26,6 +26,7 @@ from google.adk.agents import LlmAgent
 # from google.adk.tools.google_search_tool import google_search
 from google.genai import types
 
+from careflow.mcp import get_gmail_tools
 from careflow.agents.symptom_triage.prompt import SYMPTOM_TRIAGE_INSTRUCTION
 from careflow.agents.symptom_triage.tools import (
     get_adherence_history,
@@ -87,9 +88,8 @@ def build_symptom_triage_agent(suffix: str = "") -> LlmAgent:
             get_recent_health_metrics,
             lookup_icd11_code,
             send_escalation_alert,
-            # Gemini API 제약: google_search는 FunctionTool과 함께 사용 불가
-            # Gemini API constraint: google_search cannot coexist with FunctionTools
-            # ("Multiple tools are supported only when they are all search tools")
+            # MCP: Gmail 연동 — 긴급 알림 발송 (설계도 반영)
+            *get_gmail_tools(),
             # google_search,
         ],
         output_key="symptom_triage_result",
