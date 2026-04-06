@@ -91,7 +91,8 @@ _HARD_BLOCK_PATTERNS: list[re.Pattern] = [
 # PII patterns — Indian Aadhaar number, phone numbers, email addresses
 _PII_PATTERNS: dict[str, re.Pattern] = {
     "aadhaar": re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"),          # 12자리 Aadhaar
-    "phone": re.compile(r"\b(?:\+91[\s-]?)?[6-9]\d{9}\b"),         # 인도 휴대폰 / Indian mobile
+    "phone_in": re.compile(r"\b(?:\+91[\s-]?)?[6-9]\d{9}\b"),       # 인도 휴대폰 / Indian mobile
+    "phone_us": re.compile(r"\b\+1[-.\s]?\d{3}[-.\s]\d{3}[-.\s]\d{4}\b"),  # 미국 (+1 prefix 필수, 의료 수치 오탐 방지) / US phone (+1 required)
     "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
 }
 
@@ -256,7 +257,9 @@ def _mask_pii(text: str) -> str:
         digits = re.sub(r"[\s\-+]", "", match.group())
         return f"******{digits[-4:]}"
 
-    text = _PII_PATTERNS["phone"].sub(_mask_phone, text)
+    for key in _PII_PATTERNS:
+        if key.startswith("phone"):
+            text = _PII_PATTERNS[key].sub(_mask_phone, text)
 
     # 이메일 마스킹 / Email masking
     def _mask_email(match: re.Match) -> str:
