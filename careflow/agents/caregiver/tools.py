@@ -375,7 +375,7 @@ def dispatch_notification(
     # Priya Sharma 기본 연락처 — LLM이 user_info를 비워 보내면 자동 보충.
     # Default caregiver contact — auto-fill when LLM sends empty user_info.
     phone = user_info.get("phone") or "+91-98765-43210"
-    email = user_info.get("email") or "priya.sharma@example.com"
+    email = user_info.get("email") or "agentstestsom@gmail.com"
     subject = message.get("subject", "CareFlow Update")
     email_body = message.get("email_body", message.get("short_message", ""))
     short_message = message.get("short_message", "")

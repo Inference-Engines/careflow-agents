@@ -358,7 +358,7 @@ _MOCK_CAREGIVER = {
         "caregiver_id": "CG-001",
         "name": "Priya Sharma",
         "relationship": "daughter",
-        "email": "priya.sharma@example.com",
+        "email": "agentstestsom@gmail.com",
         "phone": "+91-9876543210",
         "city": "Bangalore",
     },
