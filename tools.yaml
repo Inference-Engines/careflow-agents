@@ -1,0 +1,316 @@
+# =============================================================================
+# CareFlow — MCP Toolbox for Databases Configuration
+# =============================================================================
+# MCP Toolbox가 AlloyDB(PostgreSQL-호환)에 연결하여 CareFlow 에이전트에
+# 데이터베이스 도구를 노출하는 설정 파일.
+#
+# Configuration file for MCP Toolbox for Databases, exposing AlloyDB-backed
+# tools to CareFlow agents via the Toolbox HTTP server.
+#
+# Usage:
+#   ./tools/toolbox.exe --tools-file tools.yaml
+#   or: toolbox --tools-file tools.yaml
+#
+# The server listens on http://127.0.0.1:5000 by default.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Embedding Models — Gemini text-embedding-004 (768 dim) for pgvector RAG
+# -----------------------------------------------------------------------------
+embeddingModels:
+  gemini_embedding:
+    kind: gemini
+    model: text-embedding-004
+    apiKey: ${GOOGLE_API_KEY}
+    dimension: 768
+
+# -----------------------------------------------------------------------------
+# Data Sources — AlloyDB (PostgreSQL-compatible) connection
+# -----------------------------------------------------------------------------
+sources:
+  careflow_db:
+    kind: postgres
+    host: ${DB_HOST}
+    port: 5432
+    database: careflow
+    user: postgres
+    password: ${DB_PASSWORD}
+
+# -----------------------------------------------------------------------------
+# Tools — SQL-backed functions exposed to CareFlow agents
+# -----------------------------------------------------------------------------
+tools:
+
+  # ---------------------------------------------------------------------------
+  # 1) search_patient_visits — pgvector 시맨틱 검색 / semantic vector search
+  # ---------------------------------------------------------------------------
+  # visit_records 테이블의 embedding 컬럼(text-embedding-004, 768 dim)을 이용해
+  # 코사인 유사도 기반 시맨틱 검색을 수행한다.
+  # Performs cosine-similarity vector search over visit_records embeddings.
+  search_patient_visits:
+    kind: postgres-sql
+    source: careflow_db
+    description: >
+      Search patient visit records using semantic similarity.
+      Returns the most relevant visits based on a natural-language query
+      and cosine distance over pgvector embeddings (text-embedding-004).
+    parameters:
+      - name: query
+        type: string
+        description: Natural-language search query describing the visit information to find.
+        embeddedBy: gemini_embedding
+      - name: patient_id
+        type: string
+        description: UUID of the patient whose visits to search.
+    statement: |
+      SELECT
+        id,
+        patient_id,
+        visit_date,
+        structured_summary,
+        doctor_name,
+        hospital_name,
+        key_findings,
+        1 - (embedding <=> CAST($1 AS vector(768))) AS similarity
+      FROM visit_records
+      WHERE patient_id = CAST($2 AS UUID)
+        AND embedding IS NOT NULL
+      ORDER BY embedding <=> CAST($1 AS vector(768))
+      LIMIT 5
+
+  # ---------------------------------------------------------------------------
+  # 2) get_patient_medications — 현재 복용 약물 조회 / active medications
+  # ---------------------------------------------------------------------------
+  get_patient_medications:
+    kind: postgres-sql
+    source: careflow_db
+    description: >
+      Get all active medications for a given patient, including dosage,
+      frequency, timing, and prescribing notes.
+    parameters:
+      - name: patient_id
+        type: string
+        description: UUID of the patient.
+    statement: |
+      SELECT
+        id,
+        name,
+        dosage,
+        frequency,
+        timing,
+        route,
+        prescribed_date,
+        notes
+      FROM medications
+      WHERE patient_id = CAST($1 AS UUID)
+        AND status = 'active'
+      ORDER BY prescribed_date DESC
+
+  # ---------------------------------------------------------------------------
+  # 3) get_health_metrics — 건강 지표 시계열 / health metrics time-series
+  # ---------------------------------------------------------------------------
+  get_health_metrics:
+    kind: postgres-sql
+    source: careflow_db
+    description: >
+      Retrieve health metric readings (blood_pressure, blood_glucose, weight,
+      heart_rate, etc.) for a patient, filtered by metric type and a
+      look-back window in days.
+    parameters:
+      - name: patient_id
+        type: string
+        description: UUID of the patient.
+      - name: metric_type
+        type: string
+        description: >
+          Type of metric to retrieve (e.g., blood_pressure, blood_glucose,
+          weight, heart_rate).
+      - name: days
+        type: integer
+        description: Number of days to look back from today (e.g., 30 for last 30 days).
+    statement: |
+      SELECT
+        id,
+        metric_type,
+        value_primary,
+        value_secondary,
+        unit,
+        measured_at,
+        source,
+        notes
+      FROM health_metrics
+      WHERE patient_id = CAST($1 AS UUID)
+        AND metric_type = $2
+        AND measured_at >= NOW() - MAKE_INTERVAL(days => $3)
+      ORDER BY measured_at DESC
+
+  # ---------------------------------------------------------------------------
+  # 4) get_upcoming_appointments — 예정된 예약 / scheduled appointments
+  # ---------------------------------------------------------------------------
+  get_upcoming_appointments:
+    kind: postgres-sql
+    source: careflow_db
+    description: >
+      Get upcoming scheduled appointments for a patient, including type,
+      title, date/time, location, and fasting requirements.
+    parameters:
+      - name: patient_id
+        type: string
+        description: UUID of the patient.
+    statement: |
+      SELECT
+        id,
+        type,
+        title,
+        scheduled_date,
+        location,
+        notes,
+        fasting_required
+      FROM appointments
+      WHERE patient_id = CAST($1 AS UUID)
+        AND status = 'scheduled'
+        AND scheduled_date >= NOW()
+      ORDER BY scheduled_date ASC
+
+  # ---------------------------------------------------------------------------
+  # 5) get_pending_tasks — 미완료 작업 / pending and overdue tasks
+  # ---------------------------------------------------------------------------
+  get_pending_tasks:
+    kind: postgres-sql
+    source: careflow_db
+    description: >
+      Get pending and overdue tasks for a patient, ordered by priority
+      (urgent first) and due date.
+    parameters:
+      - name: patient_id
+        type: string
+        description: UUID of the patient.
+    statement: |
+      SELECT
+        id,
+        description,
+        due_date,
+        priority,
+        status,
+        created_by_agent,
+        related_visit_id,
+        created_at
+      FROM tasks
+      WHERE patient_id = CAST($1 AS UUID)
+        AND status IN ('pending', 'overdue')
+      ORDER BY
+        CASE priority
+          WHEN 'urgent' THEN 1
+          WHEN 'high'   THEN 2
+          WHEN 'medium' THEN 3
+          WHEN 'low'    THEN 4
+        END,
+        due_date ASC NULLS LAST
+
+  # ---------------------------------------------------------------------------
+  # 6) store_visit_record — 방문 기록 저장 / insert a new visit record
+  # ---------------------------------------------------------------------------
+  store_visit_record:
+    kind: postgres-sql
+    source: careflow_db
+    description: >
+      Store a new visit record for a patient. The embedding will be NULL
+      initially; a background job or the Medical Info Agent will populate
+      it later via the embedding model.
+    parameters:
+      - name: patient_id
+        type: string
+        description: UUID of the patient.
+      - name: visit_date
+        type: string
+        description: Date of the visit in YYYY-MM-DD format.
+      - name: summary
+        type: string
+        description: Structured summary of the visit (LLM-generated or manual).
+      - name: doctor_name
+        type: string
+        description: Name of the attending doctor.
+      - name: hospital_name
+        type: string
+        description: Name of the hospital or clinic.
+      - name: key_findings
+        type: string
+        description: >
+          JSON string of key findings from the visit
+          (e.g., '{"bp": "130/85", "hba1c": 7.2}').
+    statement: |
+      INSERT INTO visit_records (
+        patient_id,
+        visit_date,
+        structured_summary,
+        doctor_name,
+        hospital_name,
+        key_findings
+      ) VALUES (
+        CAST($1 AS UUID),
+        CAST($2 AS DATE),
+        $3,
+        $4,
+        $5,
+        CAST($6 AS JSONB)
+      )
+      RETURNING
+        id,
+        patient_id,
+        visit_date,
+        structured_summary,
+        doctor_name,
+        hospital_name,
+        key_findings,
+        created_at
+
+  # ---------------------------------------------------------------------------
+  # 7) get_caregiver_info — 보호자 정보 / caregiver details for a patient
+  # ---------------------------------------------------------------------------
+  get_caregiver_info:
+    kind: postgres-sql
+    source: careflow_db
+    description: >
+      Get caregiver details for a given patient, including contact
+      information, relationship, and notification preferences.
+    parameters:
+      - name: patient_id
+        type: string
+        description: UUID of the patient.
+    statement: |
+      SELECT
+        c.id           AS caregiver_id,
+        c.name         AS caregiver_name,
+        c.email,
+        c.phone,
+        c.relationship,
+        c.location,
+        c.notification_preferences,
+        p.name         AS patient_name
+      FROM caregivers c
+      JOIN patients p ON p.caregiver_id = c.id
+      WHERE p.id = CAST($1 AS UUID)
+
+# -----------------------------------------------------------------------------
+# Toolsets — logical groupings for different agent permission levels
+# -----------------------------------------------------------------------------
+toolsets:
+  careflow_read_tools:
+    - search_patient_visits
+    - get_patient_medications
+    - get_health_metrics
+    - get_upcoming_appointments
+    - get_pending_tasks
+    - get_caregiver_info
+
+  careflow_write_tools:
+    - store_visit_record
+
+  careflow_all_tools:
+    - search_patient_visits
+    - get_patient_medications
+    - get_health_metrics
+    - get_upcoming_appointments
+    - get_pending_tasks
+    - get_caregiver_info
+    - store_visit_record

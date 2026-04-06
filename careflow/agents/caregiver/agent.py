@@ -25,6 +25,8 @@ from careflow.agents.safety.plugin import (
     before_model_callback as safety_before_model_callback,
     after_model_callback as safety_after_model_callback,
 )
+from careflow.mcp import get_gmail_tools
+
 from .prompt import CAREGIVER_INSTRUCTION
 from .tools import (
     generate_notification_message,
@@ -72,10 +74,8 @@ def build_caregiver_agent(suffix: str = "") -> LlmAgent:
             send_sms_notification,
             send_email_notification,
             dispatch_notification,
-            # Gemini API 제약: google_search는 FunctionTool과 함께 사용 불가
-            # Gemini API constraint: google_search cannot coexist with FunctionTools
-            # ("Multiple tools are supported only when they are all search tools")
-            # google_search,
+            # MCP: Gmail 연동 — 보호자 이메일 알림 (설계도 반영)
+            *get_gmail_tools(),
         ],
         output_key="caregiver_notification_result",
         description=(
