@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Mic, MicOff, Loader2 } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface VoiceAssistantProps {
@@ -12,7 +12,6 @@ type VoiceState = 'idle' | 'listening' | 'processing';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SpeechRecognitionInstance = any;
 
-/** Safe cross-browser getter for the SpeechRecognition constructor. */
 function getSpeechRecognition(): SpeechRecognitionInstance | null {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
@@ -23,7 +22,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
     const [transcript, setTranscript] = useState('');
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-    // Keep a mutable ref to the latest transcript so `onend` captures it
     const transcriptRef = useRef('');
 
     const startListening = useCallback(() => {
@@ -34,7 +32,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
         }
 
         const recognition = new SR();
-        recognition.lang = 'en-IN'; // English (India) suits Rajesh Sharma persona
+        recognition.lang = 'en-IN';
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognitionRef.current = recognition;
@@ -78,11 +76,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
     }, []);
 
     const handleClick = () => {
-        if (voiceState === 'idle') {
-            startListening();
-        } else if (voiceState === 'listening') {
-            stopListening();
-        }
+        if (voiceState === 'idle') startListening();
+        else if (voiceState === 'listening') stopListening();
     };
 
     const displayText = () => {
@@ -91,37 +86,52 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
         return `"${prompt}"`;
     };
 
+    const isListening = voiceState === 'listening';
+    const isProcessing = voiceState === 'processing';
+
     return (
-        <div className="fixed bottom-12 right-12 z-50">
+        <div className="fixed bottom-10 right-10 z-50">
+            {/* Glow pulse ring — shows when listening */}
+            {isListening && (
+                <span
+                    className="absolute inset-0 rounded-full bg-error/30 animate-pulse-ring pointer-events-none"
+                    style={{ borderRadius: '9999px' }}
+                />
+            )}
+
             <motion.button
                 key={`${prompt}-${voiceState}`}
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                whileHover={{ scale: voiceState === 'idle' ? 1.05 : 1 }}
-                whileTap={{ scale: 0.95 }}
+                initial={{ scale: 0.88, opacity: 0, y: 8 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                whileHover={voiceState === 'idle' ? { scale: 1.04 } : undefined}
+                whileTap={{ scale: 0.96 }}
                 onClick={handleClick}
-                disabled={voiceState === 'processing'}
-                className={`group relative flex items-center gap-4 px-6 py-4 rounded-full shadow-[0_12px_40px_rgba(0,88,189,0.2)] border border-white/20 transition-all ${
-                    voiceState === 'listening'
+                disabled={isProcessing}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                className={[
+                    'relative flex items-center gap-3 pl-5 pr-2 py-2 rounded-full',
+                    'border border-white/25 shadow-[0_16px_48px_-8px_rgba(28,110,242,0.28)]',
+                    'transition-colors duration-300',
+                    isListening
                         ? 'bg-error text-white'
-                        : 'bg-primary-container text-white'
-                }`}
+                        : 'bg-primary text-white',
+                ].join(' ')}
             >
-                {/* Pulse dots / status indicator */}
-                <div className="flex items-center gap-1.5">
-                    {voiceState === 'listening' ? (
+                {/* Pulse dots or spinner */}
+                <div className="flex items-center gap-1">
+                    {isProcessing ? (
+                        <Icon icon="solar:refresh-circle-bold" width={16} className="animate-spin opacity-90" />
+                    ) : isListening ? (
                         <>
-                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            <span className="w-1 h-3 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-1 h-4 rounded-full bg-white animate-bounce" style={{ animationDelay: '100ms' }} />
+                            <span className="w-1 h-2.5 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: '200ms' }} />
                         </>
-                    ) : voiceState === 'processing' ? (
-                        <Loader2 size={16} className="animate-spin" />
                     ) : (
                         <>
-                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                            <span className="w-1 h-2 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: '0s' }} />
+                            <span className="w-1 h-3 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                            <span className="w-1 h-1.5 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: '0.4s' }} />
                         </>
                     )}
                 </div>
@@ -133,15 +143,19 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
                         initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
-                        className="font-bold tracking-tight max-w-[240px] truncate"
+                        transition={{ duration: 0.2 }}
+                        className="font-semibold text-sm tracking-tight max-w-[220px] truncate leading-none"
                     >
                         {displayText()}
                     </motion.span>
                 </AnimatePresence>
 
-                {/* Mic icon */}
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-                    {voiceState === 'listening' ? <MicOff size={20} /> : <Mic size={20} />}
+                {/* Nested icon container — Supanova CTA spec */}
+                <div className="btn-icon-wrap ml-1">
+                    <Icon
+                        icon={isListening ? 'solar:microphone-slash-bold' : 'solar:microphone-bold'}
+                        width={16}
+                    />
                 </div>
             </motion.button>
         </div>

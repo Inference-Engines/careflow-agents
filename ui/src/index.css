@@ -1,49 +1,222 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Public+Sans:wght@300;400;500;600;700&display=swap');
+/* ─── Fonts ──────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+/* ─── Design Tokens ──────────────────────────────────────────────────────── */
 @theme {
-    --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
-    --font-headline: "Manrope", sans-serif;
+    /* Typography */
+    --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-headline: "Geist", sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, monospace;
 
-    --color-primary: #0058bd;
-    --color-primary-container: #2771df;
-    --color-on-primary: #ffffff;
+    /* Primary — CareFlow Blue */
+    --color-primary:           #1C6EF2;
+    --color-primary-container: #2E7CF6;
+    --color-primary-dim:       #1855C0;
+    --color-on-primary:        #ffffff;
 
-    --color-secondary: #006e2c;
-    --color-secondary-container: #86f898;
+    /* Secondary — Emerald */
+    --color-secondary:           #059669;
+    --color-secondary-container: #D1FAE5;
 
-    --color-tertiary: #765700;
-    --color-tertiary-container: #ffdea0;
+    /* Tertiary — Amber */
+    --color-tertiary:           #B45309;
+    --color-tertiary-container: #FEF3C7;
 
-    --color-error: #ba1a1a;
-    --color-error-container: #ffdad6;
+    /* Error */
+    --color-error:           #DC2626;
+    --color-error-container: #FEE2E2;
 
-    --color-background: #faf8ff;
-    --color-surface: #ffffff;
-    --color-surface-container-low: #f2f3fd;
-    --color-surface-container: #ededf7;
-    --color-surface-container-high: #e7e7f1;
-    --color-surface-container-highest: #e1e2ec;
+    /* Surfaces */
+    --color-background:               #F6F8FD;
+    --color-surface:                  #ffffff;
+    --color-surface-container-low:    #EFF2FA;
+    --color-surface-container:        #E8EBF5;
+    --color-surface-container-high:   #DDE1EF;
+    --color-surface-container-highest:#D2D6E8;
 
-    --color-outline: #727785;
-    --color-outline-variant: #c2c6d5;
+    /* Borders */
+    --color-outline:         #6B7489;
+    --color-outline-variant: #BFC4D9;
 }
 
+/* ─── Base Styles ────────────────────────────────────────────────────────── */
 @layer base {
+    html {
+        scroll-behavior: smooth;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+
     body {
         @apply bg-background text-slate-900 font-sans antialiased;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }
 
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
+    h1, h2, h3, h4, h5, h6 {
         @apply font-headline;
+        letter-spacing: -0.02em;
+    }
+
+    /* Smooth custom scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--color-outline); }
+}
+
+/* ─── Spring Easing ──────────────────────────────────────────────────────── */
+/* The Supanova motion signature — applied to ALL interactive elements */
+@layer utilities {
+    .spring {
+        transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .spring-fast {
+        transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
 }
 
+/* ─── Scroll-Reveal Animation ────────────────────────────────────────────── */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(1.5rem);
+        filter: blur(3px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-12px); }
+}
+
+@keyframes pulseRing {
+    0%   { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position: 200% 0; }
+}
+
+.animate-reveal {
+    opacity: 0;
+    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-float {
+    animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-ring {
+    animation: pulseRing 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* Stagger delays for sibling reveals */
+.stagger-1 { animation-delay: 80ms; }
+.stagger-2 { animation-delay: 160ms; }
+.stagger-3 { animation-delay: 240ms; }
+.stagger-4 { animation-delay: 320ms; }
+.stagger-5 { animation-delay: 400ms; }
+
+/* ─── Double-Bezel Card Architecture ─────────────────────────────────────── */
+/* Outer shell: the "aluminum tray" */
+.card-outer {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(28, 110, 242, 0.08);
+    box-shadow:
+        0 1px 2px rgba(28, 110, 242, 0.04),
+        0 20px 60px -15px rgba(28, 110, 242, 0.07);
+    border-radius: 1.75rem;
+    padding: 6px;
+}
+
+/* Inner core: the "glass plate" */
+.card-inner {
+    background: #ffffff;
+    border-radius: calc(1.75rem - 6px);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9);
+    height: 100%;
+}
+
+/* ─── Glassmorphism ──────────────────────────────────────────────────────── */
 .glass-panel {
-    @apply bg-white/70 backdrop-blur-xl border border-white/20;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.glass-surface {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(28, 110, 242, 0.08);
+}
+
+/* ─── Premium CTA Button ─────────────────────────────────────────────────── */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.75rem;
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 700;
+    border-radius: 9999px;
+    box-shadow: 0 8px 32px -8px rgba(28, 110, 242, 0.35);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    letter-spacing: -0.01em;
+}
+.btn-primary:hover {
+    transform: scale(1.025);
+    box-shadow: 0 12px 40px -8px rgba(28, 110, 242, 0.4);
+}
+.btn-primary:active {
+    transform: scale(0.975);
+}
+
+/* Nested icon container inside CTA — Supanova pattern */
+.btn-icon-wrap {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-primary:hover .btn-icon-wrap {
+    transform: translateX(2px);
+}
+
+/* ─── Eyebrow Pill Tag ───────────────────────────────────────────────────── */
+.eyebrow {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: rgba(28, 110, 242, 0.09);
+    color: var(--color-primary);
+}
+
+/* ─── Metric Display ─────────────────────────────────────────────────────── */
+.metric-value {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    letter-spacing: -0.03em;
+    line-height: 1;
 }

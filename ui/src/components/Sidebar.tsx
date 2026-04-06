@@ -1,73 +1,127 @@
 import React from 'react';
+import { Icon } from '@iconify/react';
 import { cn } from '@/src/lib/utils';
-import {
-    LayoutGrid,
-    Pill,
-    BarChart3,
-    Calendar,
-    Mic,
-    Settings,
-    HelpCircle
-} from 'lucide-react';
 
 interface SidebarProps {
     activeView: string;
     onViewChange: (view: string) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
-    const navItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
-        { id: 'medication', label: 'Medication', icon: Pill },
-        { id: 'insights', label: 'Insights', icon: BarChart3 },
-        { id: 'schedule', label: 'Schedule', icon: Calendar },
-    ];
+const navItems = [
+    {
+        id: 'dashboard',
+        label: 'Dashboard',
+        iconActive: 'solar:widget-bold',
+        iconIdle: 'solar:widget-linear',
+    },
+    {
+        id: 'medication',
+        label: 'Medication',
+        iconActive: 'solar:pill-bold',
+        iconIdle: 'solar:pill-linear',
+    },
+    {
+        id: 'insights',
+        label: 'Insights',
+        iconActive: 'solar:chart-square-bold',
+        iconIdle: 'solar:chart-square-linear',
+    },
+    {
+        id: 'schedule',
+        label: 'Schedule',
+        iconActive: 'solar:calendar-bold',
+        iconIdle: 'solar:calendar-linear',
+    },
+];
 
+const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
     return (
-        <aside className="h-screen w-72 fixed left-0 top-0 bg-white shadow-[0_12px_40px_rgba(0,88,189,0.06)] flex flex-col py-8 z-50">
-            <div className="px-8 mb-12">
-                <h1 className="text-2xl font-black text-primary">CareFlow AI</h1>
-                <p className="text-sm text-slate-500 font-medium mt-1">Autonomous Partner</p>
+        <aside className="h-screen w-72 fixed left-0 top-0 bg-surface flex flex-col py-8 z-50 border-r border-[#1C6EF2]/5">
+            {/* Subtle left-edge gradient accent */}
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-transparent via-primary/40 to-transparent pointer-events-none" />
+
+            {/* Logo */}
+            <div className="px-8 mb-10 animate-reveal">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-[0_4px_12px_rgba(28,110,242,0.35)]">
+                        <Icon icon="solar:heart-pulse-bold" className="text-white" width={18} />
+                    </div>
+                    <div>
+                        <h1 className="text-lg font-black text-slate-900 tracking-tight leading-none">
+                            CareFlow AI
+                        </h1>
+                        <p className="text-[11px] text-slate-400 font-medium tracking-wide mt-0.5">
+                            Autonomous Partner
+                        </p>
+                    </div>
+                </div>
             </div>
 
-            <nav className="flex-1 flex flex-col">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
+            {/* Nav */}
+            <nav className="flex-1 flex flex-col px-4 space-y-1">
+                {navItems.map((item, i) => {
                     const isActive = activeView === item.id;
                     return (
                         <button
                             key={item.id}
                             onClick={() => onViewChange(item.id)}
+                            style={{ animationDelay: `${i * 60}ms` }}
                             className={cn(
-                                "flex items-center gap-4 p-4 transition-all duration-300 w-full text-left",
+                                'animate-reveal group flex items-center gap-3.5 w-full text-left px-4 py-3 rounded-2xl',
+                                'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                                'font-semibold text-sm tracking-tight',
                                 isActive
-                                    ? "bg-primary-container text-white rounded-r-full mr-4 shadow-lg scale-95 origin-left"
-                                    : "text-slate-500 hover:text-primary hover:bg-background"
+                                    ? 'bg-primary text-white shadow-[0_8px_24px_-6px_rgba(28,110,242,0.4)]'
+                                    : 'text-slate-500 hover:text-slate-900 hover:bg-surface-container-low',
                             )}
                         >
-                            <Icon size={20} fill={isActive ? "currentColor" : "none"} />
-                            <span className="font-medium">{item.label}</span>
+                            <Icon
+                                icon={isActive ? item.iconActive : item.iconIdle}
+                                width={20}
+                                className={cn(
+                                    'shrink-0 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                                    isActive
+                                        ? 'scale-110'
+                                        : 'group-hover:scale-105',
+                                )}
+                            />
+                            <span>{item.label}</span>
+                            {isActive && (
+                                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60" />
+                            )}
                         </button>
                     );
                 })}
             </nav>
 
-            <div className="px-4 mb-6">
-                <button className="w-full flex items-center justify-center gap-3 bg-primary-container text-white py-4 rounded-full font-bold shadow-md hover:scale-[0.98] transition-all">
-                    <Mic size={20} />
-                    Voice Assistant
+            {/* Voice Assistant CTA */}
+            <div className="px-4 mb-5 animate-reveal stagger-4">
+                <button className="btn-primary w-full justify-center gap-3 py-3.5">
+                    <div className="btn-icon-wrap">
+                        <Icon icon="solar:microphone-bold" width={16} />
+                    </div>
+                    <span>Voice Assistant</span>
                 </button>
             </div>
 
-            <div className="border-t border-slate-100 pt-6">
-                <button className="flex items-center gap-4 text-slate-500 p-4 hover:text-primary transition-all w-full text-left">
-                    <Settings size={20} />
-                    <span className="font-medium">Settings</span>
-                </button>
-                <button className="flex items-center gap-4 text-slate-500 p-4 hover:text-primary transition-all w-full text-left">
-                    <HelpCircle size={20} />
-                    <span className="font-medium">Support</span>
-                </button>
+            {/* Settings / Support */}
+            <div className="border-t border-surface-container px-4 pt-4 space-y-1 animate-reveal stagger-5">
+                {[
+                    { icon: 'solar:settings-linear', label: 'Settings' },
+                    { icon: 'solar:question-circle-linear', label: 'Support' },
+                ].map(({ icon, label }) => (
+                    <button
+                        key={label}
+                        className={cn(
+                            'flex items-center gap-3.5 text-slate-400 px-4 py-3 rounded-2xl w-full text-left text-sm font-medium',
+                            'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                            'hover:text-slate-700 hover:bg-surface-container-low',
+                        )}
+                    >
+                        <Icon icon={icon} width={18} className="shrink-0" />
+                        <span>{label}</span>
+                    </button>
+                ))}
             </div>
         </aside>
     );
