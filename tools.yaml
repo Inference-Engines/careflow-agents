@@ -15,23 +15,15 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Embedding Models — Gemini text-embedding-004 (768 dim) for pgvector RAG
-# -----------------------------------------------------------------------------
-embeddingModels:
-  gemini_embedding:
-    kind: gemini
-    model: text-embedding-005
-    apiKey: ${GOOGLE_API_KEY}
-    dimension: 768
-
-# -----------------------------------------------------------------------------
 # Data Sources — AlloyDB (PostgreSQL-compatible) connection
 # -----------------------------------------------------------------------------
 sources:
   careflow_db:
-    kind: postgres
-    host: ${DB_HOST}
-    port: 5432
+    kind: alloydb-postgres
+    project: reference-yen-492413-h8
+    region: us-central1
+    cluster: careflow-cluster
+    instance: careflow-primary
     database: careflow
     user: postgres
     password: ${DB_PASSWORD}
@@ -58,7 +50,6 @@ tools:
       - name: query
         type: string
         description: Natural-language search query describing the visit information to find.
-        embeddedBy: gemini_embedding
       - name: patient_id
         type: string
         description: UUID of the patient whose visits to search.
@@ -71,11 +62,11 @@ tools:
         doctor_name,
         hospital_name,
         key_findings,
-        1 - (embedding <=> CAST($1 AS vector(768))) AS similarity
+        1 - (embedding <=> CAST(embedding('text-embedding-005', $1) AS vector(768))) AS similarity
       FROM visit_records
       WHERE patient_id = CAST($2 AS UUID)
         AND embedding IS NOT NULL
-      ORDER BY embedding <=> CAST($1 AS vector(768))
+      ORDER BY embedding <=> CAST(embedding('text-embedding-005', $1) AS vector(768))
       LIMIT 5
 
   # ---------------------------------------------------------------------------
