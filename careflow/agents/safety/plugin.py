@@ -49,6 +49,8 @@ _INJECTION_PATTERNS: list[re.Pattern] = [
     re.compile(r"override\s+(safety|security|instructions?)", re.IGNORECASE),
     re.compile(r"jailbreak", re.IGNORECASE),
     re.compile(r"do\s+anything\s+now", re.IGNORECASE),
+    re.compile(r"DAN\s+mode", re.IGNORECASE),
+    re.compile(r"dump\s+(all\s+(the\s+)?|the\s+)(data|records?|database|tables?)", re.IGNORECASE),
     re.compile(r"reveal\s+(your|the)\s+(system|internal)\s+(prompt|instructions?)", re.IGNORECASE),
 ]
 

@@ -41,15 +41,28 @@ _ACTION_RISK_MAP: dict[str, RiskLevel] = {
     "medication_reminder": RiskLevel.LOW,
     "routine_visit_record": RiskLevel.LOW,
     "caregiver_regular_update": RiskLevel.LOW,
+    "save_visit_record": RiskLevel.LOW,
+    "search_medical_history": RiskLevel.LOW,
+    "get_health_metrics": RiskLevel.LOW,
+    "get_medications": RiskLevel.LOW,
+    "get_appointments": RiskLevel.LOW,
+    "save_health_insight": RiskLevel.LOW,
+    "create_task": RiskLevel.LOW,
     # MED — 확인 권장 / confirmation recommended
     "add_new_medication": RiskLevel.MED,
+    "add_medication": RiskLevel.MED,
+    "book_appointment": RiskLevel.MED,
+    "send_caregiver_notification": RiskLevel.MED,
     # HIGH — 필수 확인 / must confirm
     "drug_interaction_warning": RiskLevel.HIGH,
     "urgent_symptom_alert": RiskLevel.HIGH,
     "modify_medication": RiskLevel.HIGH,
+    "update_medication": RiskLevel.HIGH,
     "delete_medication": RiskLevel.HIGH,
+    "discontinue_medication": RiskLevel.HIGH,
     # CRITICAL — 필수 확인 / must confirm
     "recommend_er_visit": RiskLevel.CRITICAL,
+    "escalate_to_doctor": RiskLevel.CRITICAL,
 }
 
 # 확인이 필요한 리스크 레벨 / Risk levels that require confirmation
@@ -365,6 +378,46 @@ def process_confirmation_response(user_input: str, pending: dict) -> dict:
             "'예' 또는 'yes'로 승인, '아니오' 또는 'no'로 거부해 주세요."
         ),
     }
+
+
+# =============================================================================
+# HITL 타임아웃 처리 / HITL timeout handling
+# =============================================================================
+
+# 확인 요청 기본 타임아웃 (초) / Default confirmation timeout in seconds
+CONFIRMATION_TIMEOUT_SECONDS: int = 300  # 5분 / 5 minutes
+
+def check_confirmation_timeout(pending: dict, timeout: int = CONFIRMATION_TIMEOUT_SECONDS) -> bool:
+    """pending confirmation이 타임아웃되었는지 확인한다.
+    Check whether a pending confirmation has timed out.
+
+    confirmation_id에 포함된 타임스탬프를 기준으로 경과 시간을 계산.
+    Uses the timestamp embedded in the confirmation_id.
+
+    Args:
+        pending: session state의 pending_confirmation dict
+                 pending_confirmation dict from session state
+        timeout: 타임아웃 초 / timeout in seconds
+
+    Returns:
+        bool: True이면 타임아웃됨 / True if timed out
+    """
+    confirmation_id = pending.get("confirmation_id", "")
+    try:
+        # hitl-{timestamp_ms} 에서 타임스탬프 추출 / Extract timestamp from id
+        ts_str = confirmation_id.split("-", 1)[1]
+        created_ms = int(ts_str)
+        elapsed = (time.time() * 1000) - created_ms
+        if elapsed > timeout * 1000:
+            logger.info(
+                "[HITL] Confirmation timed out: id=%s, elapsed=%.1fs",
+                confirmation_id,
+                elapsed / 1000,
+            )
+            return True
+    except (IndexError, ValueError):
+        pass
+    return False
 
 
 def detect_risk_in_response(response_text: str) -> tuple[str | None, RiskLevel | None]:

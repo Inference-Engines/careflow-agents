@@ -6,7 +6,7 @@ Gemini API 없이 mock 기반으로 동작하는 테스트.
 Mock-based tests that run without the real Gemini API.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -27,6 +27,14 @@ def mock_tool_context() -> MagicMock:
     ctx = MagicMock()
     ctx.state = {}
     return ctx
+
+
+# Auto-mock _resolve_patient_id and query_dict for all tests in this module
+@pytest.fixture(autouse=True)
+def _mock_resolve_and_db():
+    with patch("careflow.agents.diet_nutrition.tools._resolve_patient_id", side_effect=lambda pid, ctx: pid), \
+         patch("careflow.agents.diet_nutrition.tools.query_dict", return_value=[]):
+        yield
 
 
 # ---------------------------------------------------------------------------
