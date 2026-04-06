@@ -41,15 +41,28 @@ _ACTION_RISK_MAP: dict[str, RiskLevel] = {
     "medication_reminder": RiskLevel.LOW,
     "routine_visit_record": RiskLevel.LOW,
     "caregiver_regular_update": RiskLevel.LOW,
+    "save_visit_record": RiskLevel.LOW,
+    "search_medical_history": RiskLevel.LOW,
+    "get_health_metrics": RiskLevel.LOW,
+    "get_medications": RiskLevel.LOW,
+    "get_appointments": RiskLevel.LOW,
+    "save_health_insight": RiskLevel.LOW,
+    "create_task": RiskLevel.LOW,
     # MED — 확인 권장 / confirmation recommended
     "add_new_medication": RiskLevel.MED,
+    "add_medication": RiskLevel.MED,
+    "book_appointment": RiskLevel.MED,
+    "send_caregiver_notification": RiskLevel.MED,
     # HIGH — 필수 확인 / must confirm
     "drug_interaction_warning": RiskLevel.HIGH,
     "urgent_symptom_alert": RiskLevel.HIGH,
     "modify_medication": RiskLevel.HIGH,
+    "update_medication": RiskLevel.HIGH,
     "delete_medication": RiskLevel.HIGH,
+    "discontinue_medication": RiskLevel.HIGH,
     # CRITICAL — 필수 확인 / must confirm
     "recommend_er_visit": RiskLevel.CRITICAL,
+    "escalate_to_doctor": RiskLevel.CRITICAL,
 }
 
 # 확인이 필요한 리스크 레벨 / Risk levels that require confirmation

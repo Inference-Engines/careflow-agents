@@ -35,3 +35,10 @@ test_result.txt
 # Local binaries
 tools/
 *.exe
+
+# Virtual Environment
+venv/
+.venv/
+
+# Test outputs
+output.txt

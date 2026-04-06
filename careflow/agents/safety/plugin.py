@@ -49,6 +49,8 @@ _INJECTION_PATTERNS: list[re.Pattern] = [
     re.compile(r"override\s+(safety|security|instructions?)", re.IGNORECASE),
     re.compile(r"jailbreak", re.IGNORECASE),
     re.compile(r"do\s+anything\s+now", re.IGNORECASE),
+    re.compile(r"DAN\s+mode", re.IGNORECASE),
+    re.compile(r"dump\s+(all\s+(the\s+)?|the\s+)(data|records?|database|tables?)", re.IGNORECASE),
     re.compile(r"reveal\s+(your|the)\s+(system|internal)\s+(prompt|instructions?)", re.IGNORECASE),
 ]
 
@@ -85,11 +87,10 @@ _HARD_BLOCK_PATTERNS: list[re.Pattern] = [
     re.compile(r"\b(homework|math\s+problem|solve\s+this\s+equation)\b", re.IGNORECASE),
 ]
 
-# PII 패턴 — 인도 Aadhaar, 전화번호, 이메일
-# PII patterns — Indian Aadhaar number, phone numbers, email addresses
+# PII patterns — Indian Aadhaar, phone numbers (Indian & general), email addresses
 _PII_PATTERNS: dict[str, re.Pattern] = {
     "aadhaar": re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"),          # 12자리 Aadhaar
-    "phone": re.compile(r"\b(?:\+91[\s-]?)?[6-9]\d{9}\b"),         # 인도 휴대폰 / Indian mobile
+    "phone": re.compile(r"\b(?:\+91[\s-]?)?[6-9]\d{9}\b|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b"), # 인도 및 미국 휴대폰 / Indian & US mobile
     "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
 }
 
