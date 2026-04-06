@@ -1,255 +1,275 @@
 """
-CareFlow — Task Agent Unit Tests
-Tests medication extraction, safety validation, and task creation.
+Task Agent Tool Tests / 태스크 에이전트 도구 테스트
+====================================================
+Mock DB 기반으로 동작. Gemini API 호출 없이 순수 로직만 테스트.
+Runs against mock data only — no Gemini API calls.
 
-These tests use InMemoryRunner with mocked tools to verify the agent's
-reasoning and tool-calling behavior without requiring a live database.
+pytest-asyncio 사용 금지 — 일반 pytest만 사용.
+No pytest-asyncio — standard pytest only.
+
+최소 10개 테스트 케이스 포함 / Contains 10+ test cases.
 """
 
-import json
+import re
+from unittest.mock import patch, MagicMock
+
 import pytest
-import pytest_asyncio
-from unittest.mock import patch, AsyncMock
 
-from google.adk.agents import LlmAgent
-from google.adk.runners import InMemoryRunner
-from google.genai import types
-
-from careflow.config import config
+# conftest에서 FakeCtx 가져오기 / Import FakeCtx from conftest
+from careflow.tests.conftest import FakeCtx, PATIENT_UUID
 
 
-# ─────────────────────────────────────────────
-# Helper: Build a testable Task Agent with mocked tools
-# ─────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# ToolContext mock 헬퍼 / ToolContext mock helper
+# ---------------------------------------------------------------------------
 
-def build_test_task_agent(mock_medication_tools, mock_db):
-    """Create a Task Agent with mocked tools for testing."""
-    from careflow.agents.task.tools import check_drug_interactions, lookup_medication_info
-
-    agent = LlmAgent(
-        name="task_agent",
-        model=config.AGENT_MODEL,
-        description=(
-            "Extracts medications, follow-up tasks, and action items from visit notes. "
-            "Performs medication safety validation by checking drug interactions."
-        ),
-        instruction="""You are the CareFlow Task Agent. Extract medications and tasks from user input.
-        For each medication, check interactions against current medications.
-        The patient_id is: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-        Always call get_current_medications first, then check_drug_interactions for new meds.
-        Respond with your findings in a clear, structured format.""",
-        tools=[
-            mock_medication_tools["get_current_medications"],
-            mock_medication_tools["add_medication"],
-            mock_medication_tools["update_medication_status"],
-            mock_medication_tools["log_medication_change"],
-            check_drug_interactions,
-            lookup_medication_info,
-        ],
-    )
-    return agent
+def _make_ctx(state: dict | None = None) -> FakeCtx:
+    """기본 환자 state가 포함된 FakeCtx 생성.
+    Create FakeCtx with default patient state.
+    """
+    s = {"current_patient_id": PATIENT_UUID}
+    if state:
+        s.update(state)
+    return FakeCtx(state=s)
 
 
-# ─────────────────────────────────────────────
-# Tests
-# ─────────────────────────────────────────────
+# ===========================================================================
+# 1. get_current_medications / 현재 약물 조회
+# ===========================================================================
 
-class TestTaskAgentMedicationExtraction:
-    """Tests for medication extraction from visit notes."""
+class TestGetCurrentMedications:
+    """get_current_medications mock 테스트."""
 
-    @pytest.mark.asyncio
-    async def test_extract_new_medication(self, mock_medication_tools, mock_db, patient_id):
-        """Agent should identify a new medication from a visit note."""
-        agent = build_test_task_agent(mock_medication_tools, mock_db)
-        runner = InMemoryRunner(agent=agent, app_name="test")
+    @patch("careflow.agents.task.tools._resolve_patient_id", side_effect=lambda pid, ctx: "patient_001")
+    @patch("careflow.agents.task.tools._is_db_available", return_value=False)
+    def test_returns_mock_medications(self, _mock_db, _mock_resolve):
+        """AlloyDB 미사용 시 mock 데이터 5개 약물 반환."""
+        from careflow.agents.task.tools import get_current_medications
 
-        session = await runner.session_service.create_session(
-            app_name="test",
-            user_id="test_user",
-            state={"patient_id": patient_id},
+        ctx = _make_ctx()
+        result = get_current_medications("patient_001", ctx)
+
+        assert result["status"] == "success"
+        assert result["source"] == "mock"
+        assert result["medication_count"] == 5
+        assert len(result["medications"]) == 5
+        names = {m["name"] for m in result["medications"]}
+        assert "Metformin" in names
+        assert "Lisinopril" in names
+
+    @patch("careflow.agents.task.tools._is_db_available", return_value=False)
+    def test_patient_id_resolved(self, _mock_db):
+        """placeholder 'patient_001'가 UUID로 교정되어야 함.
+        Placeholder should be resolved to UUID.
+        """
+        from careflow.agents.task.tools import get_current_medications
+
+        ctx = _make_ctx()
+        result = get_current_medications("patient_001", ctx)
+        assert result["patient_id"] == PATIENT_UUID
+
+
+# ===========================================================================
+# 2. add_medication / 약물 추가
+# ===========================================================================
+
+class TestAddMedication:
+    """add_medication mock 테스트."""
+
+    @patch("careflow.agents.task.tools._resolve_patient_id", side_effect=lambda pid, ctx: "patient_001")
+    @patch("careflow.agents.task.tools._is_db_available", return_value=False)
+    def test_adds_medication_to_state(self, _mock_db, _mock_resolve):
+        """새 약물 추가 후 state에 반영되는지 확인."""
+        from careflow.agents.task.tools import add_medication, get_current_medications
+
+        ctx = _make_ctx()
+        result = add_medication(
+            patient_id="patient_001",
+            name="Glimepiride",
+            dosage="2mg",
+            frequency="once_daily",
+            timing="before_breakfast",
+            tool_context=ctx,
         )
+        assert result["status"] == "success"
+        assert result["name"] == "Glimepiride"
+        assert result["medication_id"].startswith("MED-")
 
-        content = types.Content(
-            role="user",
-            parts=[types.Part.from_text(
-                text="The doctor prescribed Lisinopril 10mg once daily for blood pressure."
-            )],
-        )
+        # 추가 후 총 6개 약물이어야 함 / Should now have 6 medications
+        meds_result = get_current_medications("patient_001", ctx)
+        assert meds_result["medication_count"] == 6
 
-        final_response = ""
-        async for event in runner.run_async(
-            user_id="test_user",
-            session_id=session.id,
-            new_message=content,
+
+# ===========================================================================
+# 3. check_drug_interactions (openFDA hit) / 약물 상호작용 (openFDA 경로)
+# ===========================================================================
+
+class TestCheckDrugInteractionsOpenFDA:
+    """openFDA 레이어에서 상호작용 감지 테스트."""
+
+    @patch("careflow.agents.task.tools.query_dict", return_value=[])
+    def test_openfda_hit(self, _mock_query):
+        """openFDA에서 상호작용 발견 시 결과 반환."""
+        from careflow.agents.task.tools import check_drug_interactions
+
+        mock_fda_result = {
+            "status": "checked",
+            "interaction_count": 1,
+            "interactions": [
+                {
+                    "drug_pair": ["Warfarin", "Aspirin"],
+                    "severity": "HIGH",
+                    "description": "Increased bleeding risk",
+                    "source": "openfda_drug_label",
+                },
+            ],
+        }
+
+        with patch(
+            "careflow.agents.shared.openfda_api.check_drug_interactions_via_fda",
+            return_value=mock_fda_result,
         ):
-            if event.is_final_response() and event.content and event.content.parts:
-                final_response = event.content.parts[0].text
+            ctx = _make_ctx()
+            result = check_drug_interactions("Warfarin", ["Aspirin"], ctx)
 
-        # Verify the agent mentioned the medication
-        response_lower = final_response.lower()
-        assert "lisinopril" in response_lower, (
-            f"Agent should have extracted Lisinopril. Got: {final_response}"
-        )
+        assert result["status"] == "interactions_detected"
+        assert result["source"] == "openfda_drug_label"
+        assert result["interaction_count"] == 1
+        assert result["safety_check"] == "warning"
 
-    @pytest.mark.asyncio
-    async def test_detect_dosage_change(self, mock_medication_tools, mock_db, patient_id):
-        """Agent should detect when an existing medication's dosage changes."""
-        agent = build_test_task_agent(mock_medication_tools, mock_db)
-        runner = InMemoryRunner(agent=agent, app_name="test")
 
-        session = await runner.session_service.create_session(
-            app_name="test",
-            user_id="test_user",
-            state={"patient_id": patient_id},
-        )
+# ===========================================================================
+# 4. check_drug_interactions (local fallback) / 약물 상호작용 (로컬 폴백)
+# ===========================================================================
 
-        content = types.Content(
-            role="user",
-            parts=[types.Part.from_text(
-                text="Doctor increased my Metformin from 500mg to 1000mg, twice daily with meals."
-            )],
-        )
+class TestCheckDrugInteractionsLocalFallback:
+    """openFDA 실패 → 로컬 하드코딩 폴백 테스트."""
 
-        final_response = ""
-        async for event in runner.run_async(
-            user_id="test_user",
-            session_id=session.id,
-            new_message=content,
+    @patch("careflow.agents.task.tools.query_dict", return_value=[])
+    def test_local_fallback_warfarin_aspirin(self, _mock_query):
+        """openFDA 실패 시 로컬 테이블에서 warfarin-aspirin 상호작용 탐지."""
+        from careflow.agents.task.tools import check_drug_interactions
+
+        # openFDA 호출 실패 시뮬레이션 / Simulate openFDA failure
+        with patch(
+            "careflow.agents.shared.openfda_api.check_drug_interactions_via_fda",
+            side_effect=Exception("Network error"),
         ):
-            if event.is_final_response() and event.content and event.content.parts:
-                final_response = event.content.parts[0].text
+            ctx = _make_ctx()
+            result = check_drug_interactions("Warfarin", ["Aspirin"], ctx)
 
-        response_lower = final_response.lower()
-        assert "metformin" in response_lower, (
-            f"Agent should have identified Metformin change. Got: {final_response}"
-        )
-        assert "1000" in final_response, (
-            f"Agent should mention the new dosage 1000mg. Got: {final_response}"
-        )
+        assert result["status"] == "interactions_detected"
+        assert result["source"] == "local_fallback"
+        assert result["interaction_count"] > 0
 
+    @patch("careflow.agents.task.tools.query_dict", return_value=[])
+    def test_local_fallback_no_interaction(self, _mock_query):
+        """로컬 테이블에도 없는 약물 조합 → no_interactions."""
+        from careflow.agents.task.tools import check_drug_interactions
 
-class TestTaskAgentSafetyValidation:
-    """Tests for drug interaction safety checking."""
-
-    @pytest.mark.asyncio
-    async def test_safety_check_triggered(self, mock_medication_tools, mock_db, patient_id):
-        """Agent should call safety check tools for new medications."""
-        agent = build_test_task_agent(mock_medication_tools, mock_db)
-        runner = InMemoryRunner(agent=agent, app_name="test")
-
-        session = await runner.session_service.create_session(
-            app_name="test",
-            user_id="test_user",
-            state={"patient_id": patient_id},
-        )
-
-        content = types.Content(
-            role="user",
-            parts=[types.Part.from_text(
-                text="I was prescribed Warfarin 5mg daily. Please check if it's safe with my current medications."
-            )],
-        )
-
-        tool_calls_made = []
-        final_response = ""
-
-        async for event in runner.run_async(
-            user_id="test_user",
-            session_id=session.id,
-            new_message=content,
+        with patch(
+            "careflow.agents.shared.openfda_api.check_drug_interactions_via_fda",
+            side_effect=Exception("Network error"),
         ):
-            # Track tool calls
-            if hasattr(event, 'function_calls') and event.function_calls:
-                for fc in event.function_calls:
-                    tool_calls_made.append(fc.name)
+            ctx = _make_ctx()
+            result = check_drug_interactions("Vitamin_D", ["Calcium"], ctx)
 
-            if event.is_final_response() and event.content and event.content.parts:
-                final_response = event.content.parts[0].text
-
-        # Agent should mention safety/interaction check
-        response_lower = final_response.lower()
-        assert any(
-            word in response_lower
-            for word in ["safe", "interaction", "check", "warfarin", "aspirin"]
-        ), f"Agent should discuss safety. Got: {final_response}"
+        assert result["status"] == "no_interactions"
 
 
-class TestTaskAgentTaskExtraction:
-    """Tests for task/action-item extraction."""
+# ===========================================================================
+# 5. resolve_patient_id / 환자 ID 교정
+# ===========================================================================
 
-    @pytest.mark.asyncio
-    async def test_extract_lab_test_task(self, mock_medication_tools, mock_db, patient_id):
-        """Agent should extract lab test tasks with fasting flags."""
-        agent = build_test_task_agent(mock_medication_tools, mock_db)
-        runner = InMemoryRunner(agent=agent, app_name="test")
+class TestResolvePatientId:
+    """resolve_patient_id 테스트 — UUID vs placeholder."""
 
-        session = await runner.session_service.create_session(
-            app_name="test",
-            user_id="test_user",
-            state={"patient_id": patient_id},
-        )
+    def test_valid_uuid_passthrough(self):
+        """정상 UUID는 그대로 통과. Valid UUID passes through."""
+        from careflow.agents.shared.patient_utils import resolve_patient_id
 
-        content = types.Content(
-            role="user",
-            parts=[types.Part.from_text(
-                text="Doctor wants me to get an HbA1c blood test in 2 weeks. "
-                     "I need to fast for 12 hours before the test."
-            )],
-        )
+        ctx = _make_ctx()
+        result = resolve_patient_id(PATIENT_UUID, ctx)
+        assert result == PATIENT_UUID
 
-        final_response = ""
-        async for event in runner.run_async(
-            user_id="test_user",
-            session_id=session.id,
-            new_message=content,
-        ):
-            if event.is_final_response() and event.content and event.content.parts:
-                final_response = event.content.parts[0].text
+    def test_placeholder_resolved_to_state(self):
+        """placeholder → state의 UUID로 교정."""
+        from careflow.agents.shared.patient_utils import resolve_patient_id
 
-        response_lower = final_response.lower()
-        assert "hba1c" in response_lower or "blood test" in response_lower, (
-            f"Agent should mention the blood test. Got: {final_response}"
-        )
-        assert "fast" in response_lower, (
-            f"Agent should flag fasting requirement. Got: {final_response}"
-        )
+        ctx = _make_ctx()
+        result = resolve_patient_id("patient_001", ctx)
+        assert result == PATIENT_UUID
 
-    @pytest.mark.asyncio
-    async def test_extract_multiple_tasks(self, mock_medication_tools, mock_db, patient_id):
-        """Agent should handle multiple tasks from a single visit note."""
-        agent = build_test_task_agent(mock_medication_tools, mock_db)
-        runner = InMemoryRunner(agent=agent, app_name="test")
+    def test_no_state_uses_default(self):
+        """state에도 없으면 기본값 사용. Falls back to default UUID."""
+        from careflow.agents.shared.patient_utils import resolve_patient_id
 
-        session = await runner.session_service.create_session(
-            app_name="test",
-            user_id="test_user",
-            state={"patient_id": patient_id},
-        )
+        result = resolve_patient_id("patient_001", None)
+        assert result == PATIENT_UUID
 
-        content = types.Content(
-            role="user",
-            parts=[types.Part.from_text(
-                text="After today's visit: 1) Get blood sugar test next week, "
-                     "2) Start walking 30 minutes daily, "
-                     "3) Reduce salt intake, "
-                     "4) Follow-up appointment in 3 months."
-            )],
-        )
 
-        final_response = ""
-        async for event in runner.run_async(
-            user_id="test_user",
-            session_id=session.id,
-            new_message=content,
-        ):
-            if event.is_final_response() and event.content and event.content.parts:
-                final_response = event.content.parts[0].text
+# ===========================================================================
+# 6. Severity Classification / 심각도 분류
+# ===========================================================================
 
-        response_lower = final_response.lower()
-        # Agent should identify multiple tasks
-        task_keywords = ["blood sugar", "walking", "salt", "follow-up"]
-        found_count = sum(1 for kw in task_keywords if kw in response_lower)
-        assert found_count >= 2, (
-            f"Agent should extract multiple tasks. Found {found_count}/4 keywords. "
-            f"Got: {final_response}"
-        )
+class TestSeverityClassification:
+    """_classify_interaction_severity, _max_severity 테스트."""
+
+    def test_classify_warning(self):
+        """HIGH severity → warning."""
+        from careflow.agents.task.tools import _classify_interaction_severity
+
+        normalized = [{"severity": "HIGH", "medication1": "A", "medication2": "B"}]
+        assert _classify_interaction_severity(normalized) == "warning"
+
+    def test_classify_info(self):
+        """LOW severity → info."""
+        from careflow.agents.task.tools import _classify_interaction_severity
+
+        normalized = [{"severity": "LOW", "medication1": "A", "medication2": "B"}]
+        assert _classify_interaction_severity(normalized) == "info"
+
+    def test_max_severity(self):
+        """가장 높은 severity 반환."""
+        from careflow.agents.task.tools import _max_severity
+
+        assert _max_severity(["LOW", "HIGH", "MODERATE"]) == "HIGH"
+        assert _max_severity(["LOW"]) == "LOW"
+        assert _max_severity([]) == "INFO"
+
+
+# ===========================================================================
+# 7. HITL Trigger / HITL 트리거
+# ===========================================================================
+
+class TestHITLTrigger:
+    """_trigger_hitl_if_needed 테스트."""
+
+    def test_trigger_sets_pending_hitl(self):
+        """warning 상호작용 시 pending_hitl state 설정."""
+        from careflow.agents.task.tools import _trigger_hitl_if_needed
+
+        ctx = _make_ctx()
+        normalized = [
+            {"severity": "HIGH", "medication1": "Warfarin", "medication2": "Aspirin"}
+        ]
+        _trigger_hitl_if_needed(ctx, "warning", normalized, "local_fallback")
+
+        assert "pending_hitl" in ctx.state
+        assert ctx.state["pending_hitl"]["action_type"] == "drug_interaction_warning"
+        assert ctx.state["pending_hitl"]["severity"] == "HIGH"
+
+    def test_no_trigger_on_info(self):
+        """info 수준에서는 pending_hitl 미설정."""
+        from careflow.agents.task.tools import _trigger_hitl_if_needed
+
+        ctx = _make_ctx()
+        _trigger_hitl_if_needed(ctx, "info", [], "local_fallback")
+        assert "pending_hitl" not in ctx.state
+
+    def test_no_trigger_without_context(self):
+        """tool_context=None 에서도 에러 없이 동작."""
+        from careflow.agents.task.tools import _trigger_hitl_if_needed
+
+        # Should not raise / 에러 없어야 함
+        _trigger_hitl_if_needed(None, "warning", [], "local_fallback")

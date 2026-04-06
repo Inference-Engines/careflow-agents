@@ -180,6 +180,23 @@ async def classify_scope(message: str) -> dict[str, Any]:
     if _GREETING_PATTERNS.match(stripped):
         return {"label": "in_scope", "confidence": 1.0, "reason": "greeting"}
 
+    # ── Fast-path 2.5: 의료 키워드 → 즉시 in_scope (RPM 절약) ──
+    # Fast-path 2.5: medical keywords → in_scope immediately, saves RPM.
+    _MEDICAL_KEYWORDS = {
+        "blood pressure", "bp", "sugar", "glucose", "hba1c", "diabetes",
+        "hypertension", "medication", "medicine", "pill", "tablet", "dose",
+        "doctor", "appointment", "dizzy", "pain", "nausea", "headache",
+        "symptom", "chest", "heart", "breathing", "shaking", "tremor",
+        "diet", "sodium", "salt", "food", "eat", "lunch", "dinner",
+        "exercise", "walk", "weight", "test", "lab", "report",
+        "metformin", "amlodipine", "aspirin", "atorvastatin", "lisinopril",
+        "caregiver", "father", "mother", "daughter", "priya",
+        "trending", "insight", "health", "medical", "visit", "follow-up",
+    }
+    lower = stripped.lower()
+    if any(kw in lower for kw in _MEDICAL_KEYWORDS):
+        return {"label": "in_scope", "confidence": 0.95, "reason": "medical_keyword"}
+
     # ── Fast-path 3: 메모이제이션 캐시 히트 → Flash 호출 skip ──
     # Fast-path 3: memoization cache hit → skip Flash.
     cache_key = stripped.lower()[:200]

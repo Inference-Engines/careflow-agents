@@ -380,6 +380,46 @@ def process_confirmation_response(user_input: str, pending: dict) -> dict:
     }
 
 
+# =============================================================================
+# HITL 타임아웃 처리 / HITL timeout handling
+# =============================================================================
+
+# 확인 요청 기본 타임아웃 (초) / Default confirmation timeout in seconds
+CONFIRMATION_TIMEOUT_SECONDS: int = 300  # 5분 / 5 minutes
+
+def check_confirmation_timeout(pending: dict, timeout: int = CONFIRMATION_TIMEOUT_SECONDS) -> bool:
+    """pending confirmation이 타임아웃되었는지 확인한다.
+    Check whether a pending confirmation has timed out.
+
+    confirmation_id에 포함된 타임스탬프를 기준으로 경과 시간을 계산.
+    Uses the timestamp embedded in the confirmation_id.
+
+    Args:
+        pending: session state의 pending_confirmation dict
+                 pending_confirmation dict from session state
+        timeout: 타임아웃 초 / timeout in seconds
+
+    Returns:
+        bool: True이면 타임아웃됨 / True if timed out
+    """
+    confirmation_id = pending.get("confirmation_id", "")
+    try:
+        # hitl-{timestamp_ms} 에서 타임스탬프 추출 / Extract timestamp from id
+        ts_str = confirmation_id.split("-", 1)[1]
+        created_ms = int(ts_str)
+        elapsed = (time.time() * 1000) - created_ms
+        if elapsed > timeout * 1000:
+            logger.info(
+                "[HITL] Confirmation timed out: id=%s, elapsed=%.1fs",
+                confirmation_id,
+                elapsed / 1000,
+            )
+            return True
+    except (IndexError, ValueError):
+        pass
+    return False
+
+
 def detect_risk_in_response(response_text: str) -> tuple[str | None, RiskLevel | None]:
     """응답 텍스트에서 고위험 액션 키워드를 감지한다.
     Detect high-risk action keywords in response text.

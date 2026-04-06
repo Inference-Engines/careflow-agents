@@ -24,6 +24,8 @@ from careflow.agents.safety.plugin import (
     before_model_callback as safety_before_model_callback,
     after_model_callback as safety_after_model_callback,
 )
+from careflow.mcp import get_calendar_tools
+
 from .prompt import SCHEDULE_INSTRUCTION
 from .tools import (
     check_availability,
@@ -271,6 +273,8 @@ def build_schedule_agent(suffix: str = "") -> LlmAgent:
             list_appointments,
             cancel_appointment,
             check_conflicts,
+            # MCP: Google Calendar 연동 (설계도 반영)
+            *get_calendar_tools(),
         ],
         output_key="schedule_result",
         description=(
