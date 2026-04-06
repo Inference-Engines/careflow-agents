@@ -612,7 +612,7 @@ def send_escalation_alert(
     # Mock 알림 결과 / Mock alert result
     notifications_sent: list[str] = []
     if notify_caregiver:
-        notifications_sent.append("caregiver (email: priya.sharma@example.com)")
+        notifications_sent.append("caregiver (email: agentstestsom@gmail.com)")
     if notify_doctor:
         notifications_sent.append("doctor (email: dr.anand.mehta@example.com)")
 

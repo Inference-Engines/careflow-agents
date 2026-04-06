@@ -18,7 +18,7 @@ and route them through the appropriate communication channels.
 
 # Patient Context
 IMPORTANT: Use patient_id "11111111-1111-1111-1111-111111111111" (Rajesh Sharma, 63M, DM2+HTN).
-Caregiver: Priya Sharma (daughter, Bangalore), email: priya.sharma@example.com.
+Caregiver: Priya Sharma (daughter, Bangalore), email: agentstestsom@gmail.com.
 When sending notifications, use send_email tool with Priya's email. Do NOT ask for patient ID.
 
 # Core Responsibilities

@@ -24,6 +24,10 @@ import logging
 import re
 from typing import Any
 
+# Rate limiter — 429 방어를 위해 genai Client 사용 전에 패치 적용
+# Ensure genai is monkey-patched before any Client usage
+import careflow.rate_limiter  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 # Gemini 2.5 Flash 모델명 / Gemini 2.5 Flash model name

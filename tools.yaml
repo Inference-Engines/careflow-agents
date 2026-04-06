@@ -24,11 +24,11 @@ sources:
   # For deployment: switch to kind: alloydb-postgres with GCP IAM auth
   careflow_db:
     kind: postgres
-    host: 34.133.59.124
+    host: ${DB_HOST}
     port: 5432
-    database: careflow
-    user: postgres
-    password: CareflowDemo2026
+    database: ${DB_NAME}
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
 
 # -----------------------------------------------------------------------------
 # Tools — SQL-backed functions exposed to CareFlow agents
