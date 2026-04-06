@@ -17,6 +17,7 @@ from google.adk.tools import ToolContext
 
 # AlloyDB 우선 조회용 공용 헬퍼 / Shared helper for AlloyDB-first lookups
 from careflow.db.alloydb_client import query_dict
+from careflow.agents.shared.patient_utils import resolve_patient_id as _resolve_patient_id
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,18 @@ def get_health_metrics(
         dict with "status", "patient_id", "metric_type", "period_days", "data_points",
         and "values" (list of {date, value}).
     """
+    patient_id = _resolve_patient_id(patient_id, tool_context)
+    # DB의 metric_type은 "blood_pressure" (systolic+diastolic 통합), mock은 별도.
+    # LLM이 "blood_pressure_systolic" / "blood_pressure_diastolic"로 보내는 경우 매핑.
+    _METRIC_ALIAS = {
+        "blood_pressure_systolic": "blood_pressure",
+        "blood_pressure_diastolic": "blood_pressure",
+        "bp_systolic": "blood_pressure",
+        "bp_diastolic": "blood_pressure",
+        "fasting_blood_glucose": "blood_glucose",
+        "weight_kg": "weight",
+    }
+    db_metric_type = _METRIC_ALIAS.get(metric_type.lower(), metric_type)
     # state에 조회 이력 기록 / Log query history in session state
     query_log = tool_context.state.get("health_metric_queries", [])
     query_log.append({
@@ -175,21 +188,29 @@ def get_health_metrics(
           AND measured_at >= NOW() - (:days || ' days')::interval
         ORDER BY measured_at ASC
         """,
-        {"pid": patient_id, "mtype": metric_type, "days": days},
+        {"pid": patient_id, "mtype": db_metric_type, "days": days},
     )
     if db_rows:
         logger.info(f"health_metrics.from_db: {len(db_rows)} rows")
-        values = [
-            {
-                "date": (
-                    row["measured_at"].strftime("%Y-%m-%d")
-                    if hasattr(row["measured_at"], "strftime")
-                    else str(row["measured_at"])
-                ),
-                "value": row.get("value_primary"),
-            }
-            for row in db_rows
-        ]
+        # blood_pressure는 value_primary=systolic, value_secondary=diastolic.
+        # 원래 metric_type에 맞춰 필드명을 분기.
+        is_bp = db_metric_type == "blood_pressure"
+        values = []
+        for row in db_rows:
+            date_str = (
+                row["measured_at"].strftime("%Y-%m-%d")
+                if hasattr(row["measured_at"], "strftime")
+                else str(row["measured_at"])
+            )
+            entry = {"date": date_str}
+            if is_bp:
+                entry["systolic"] = row.get("value_primary")
+                entry["diastolic"] = row.get("value_secondary")
+                entry["value"] = f"{row.get('value_primary')}/{row.get('value_secondary')}"
+            else:
+                entry["value"] = row.get("value_primary")
+            entry["unit"] = row.get("unit", "")
+            values.append(entry)
         return {
             "status": "success",
             "source": "alloydb",
@@ -255,6 +276,7 @@ def get_medication_history(
     Returns:
         dict with "status", "patient_id", "medication_count", and "medications" list.
     """
+    patient_id = _resolve_patient_id(patient_id, tool_context)
     # state에 최근 조회 환자 기록 / Track last queried patient in state
     tool_context.state["last_medication_query_patient"] = patient_id
 
@@ -337,6 +359,7 @@ def get_visit_records(
     Returns:
         dict with "status", "patient_id", "period_days", "record_count", and "records" list.
     """
+    patient_id = _resolve_patient_id(patient_id, tool_context)
     # ---------------------------------------------------------------
     # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
     # ---------------------------------------------------------------

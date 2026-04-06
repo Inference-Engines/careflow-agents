@@ -32,6 +32,7 @@ from google.adk.tools import ToolContext
 
 # AlloyDB 우선 조회용 공용 헬퍼 / Shared helper for AlloyDB-first lookups
 from careflow.db.alloydb_client import query_dict
+from careflow.agents.shared.patient_utils import resolve_patient_id as _resolve_patient_id
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,16 @@ _MOCK_MEDICATIONS: dict[str, list[dict]] = {
 
 # 환자별 식이 제한 사항 (의사 지시) / Doctor-ordered dietary restrictions
 _MOCK_DIETARY_RESTRICTIONS: dict[str, dict] = {
+    # Rajesh Sharma UUID (AlloyDB seed) — LLM이 UUID로 조회할 때 대응.
+    "11111111-1111-1111-1111-111111111111": {
+        "conditions": ["DM2", "HTN"],
+        "restrictions": [
+            {"type": "low_sodium", "target_mg": 2000, "source": "Dr. Patel — visit 2026-01-10"},
+            {"type": "low_sugar", "target_g": 25, "source": "Dr. Patel — visit 2026-01-10"},
+        ],
+        "allergies": [],
+        "locale": "India",
+    },
     "patient_001": {
         "conditions": ["DM2", "HTN"],
         "restrictions": [
@@ -264,6 +275,16 @@ _MOCK_FOOD_DRUG_INTERACTIONS: dict[str, dict[str, dict]] = {
             "recommendation": "Limit alcohol to at most 1 drink/day for women, 2 for men. Avoid binge drinking.",
             "source": "openFDA Drug Label / DailyMed NLM",
         },
+        "Aspirin": {
+            "severity": "WARNING",
+            "interaction": (
+                "Alcohol combined with Aspirin significantly increases the risk "
+                "of gastrointestinal bleeding. Both are gastric irritants and "
+                "together they synergistically damage the stomach lining."
+            ),
+            "recommendation": "Avoid alcohol or limit to occasional, small amounts. Never drink on an empty stomach while on Aspirin.",
+            "source": "openFDA Drug Label / DailyMed NLM",
+        },
     },
     "spinach": {
         "Warfarin": {
@@ -304,6 +325,32 @@ _MOCK_FOOD_DRUG_INTERACTIONS: dict[str, dict[str, dict]] = {
             "source": "openFDA Drug Label / DailyMed NLM",
         },
     },
+    # Dr. Mehrotra 지적: ACE inhibitor(Lisinopril) 환자는 모든 고칼륨 식품에 주의.
+    # All high-potassium foods flagged for ACE inhibitor patients.
+    "tomato": {
+        "Lisinopril": {
+            "severity": "CAUTION",
+            "interaction": "Tomatoes are high in potassium. ACE inhibitors like Lisinopril can increase potassium retention, raising hyperkalemia risk.",
+            "recommendation": "Moderate tomato/sauce intake. Monitor potassium levels at regular checkups.",
+            "source": "openFDA Drug Label / DailyMed NLM",
+        },
+    },
+    "potato": {
+        "Lisinopril": {
+            "severity": "CAUTION",
+            "interaction": "Potatoes (especially baked/sweet) are high in potassium. Combined with Lisinopril's potassium-sparing effect, this raises hyperkalemia risk.",
+            "recommendation": "Moderate portions. Boiling and discarding water reduces potassium content.",
+            "source": "openFDA Drug Label / DailyMed NLM",
+        },
+    },
+    "orange": {
+        "Lisinopril": {
+            "severity": "CAUTION",
+            "interaction": "Oranges and orange juice are rich in potassium. ACE inhibitors reduce potassium excretion, increasing hyperkalemia risk.",
+            "recommendation": "Limit to 1 serving/day. Prefer whole fruit over juice (lower glycemic impact for DM2).",
+            "source": "openFDA Drug Label / DailyMed NLM",
+        },
+    },
 }
 
 
@@ -324,13 +371,10 @@ def get_patient_medications(patient_id: str, tool_context: ToolContext) -> dict:
     Returns:
         dict with 'medications' list or 'error' message.
     """
+    patient_id = _resolve_patient_id(patient_id, tool_context)
     # ---------------------------------------------------------------
     # 1단계: AlloyDB 우선 조회 / Step 1: Try AlloyDB first
     # ---------------------------------------------------------------
-    # 실제 스키마: medications(name, dosage, frequency, timing, status, ...)
-    # purpose 컬럼은 스키마에 존재하지 않으므로 제거
-    # Actual schema: medications(name, dosage, frequency, timing, status, ...)
-    # `purpose` column does not exist in schema, so it has been removed.
     db_rows = query_dict(
         """
         SELECT name AS drug_name, dosage, frequency, timing, status
@@ -384,6 +428,7 @@ def get_dietary_restrictions(patient_id: str, tool_context: ToolContext) -> dict
     # Note: AlloyDB schema has no `dietary_restrictions` table, so we
     #       serve from the mock fallback only.
     # ---------------------------------------------------------------
+    patient_id = _resolve_patient_id(patient_id, tool_context)
     logger.info("diet.get_dietary_restrictions.mock_only")
     restrictions = _MOCK_DIETARY_RESTRICTIONS.get(patient_id)
     if restrictions is None:

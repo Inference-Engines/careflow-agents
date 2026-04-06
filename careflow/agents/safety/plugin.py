@@ -360,10 +360,15 @@ async def before_model_callback(
         pass
 
     if current_patient_id:
-        # 다른 환자 ID 패턴 탐지 — "patient 12345", "patient_id: 999" 등
-        # Detect other patient ID patterns — "patient 12345", "patient_id: 999", etc.
+        # 다른 환자 ID 패턴 탐지 — "patient_id: 999", "patient 12345" 등.
+        # 이전: \w+ 이 "patient to" 의 "to" 도 잡아서 false positive.
+        # 수정: ID는 숫자 포함 필수 또는 UUID 형태만 매칭 (일반 영단어 제외).
+        # Detect other patient ID patterns. Previous \w+ was too broad and
+        # matched ordinary words like "to" in "patient to". Now requires at
+        # least one digit or a UUID-like pattern to be treated as an ID.
         patient_id_pattern = re.compile(
-            r"\b(?:patient[_\s-]*(?:id)?[:\s]*(\w+))\b", re.IGNORECASE
+            r"\bpatient[_\s-]*(?:id)?[:\s]*((?:\w*\d+\w*|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))\b",
+            re.IGNORECASE,
         )
         matches = patient_id_pattern.findall(user_text)
         for matched_id in matches:

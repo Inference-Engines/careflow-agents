@@ -97,10 +97,32 @@ def query_dict(sql: str, params: Optional[dict] = None) -> list[dict]:
 
         with engine.connect() as conn:
             result = conn.execute(text(sql), params or {})
-            return [dict(row._mapping) for row in result]
+            return [_serialize_row(row._mapping) for row in result]
     except Exception as e:  # pragma: no cover — defensive
         logger.error(f"alloydb.query_failed: {e}")
         return []
+
+
+def _serialize_row(mapping) -> dict:
+    """AlloyDB 결과를 JSON 직렬화 가능한 dict로 변환.
+
+    UUID, date, datetime, Decimal 등을 str/float로 변환하여
+    ADK FunctionTool이 JSON.dumps 할 때 터지지 않도록 한다.
+    """
+    import uuid as _uuid_mod
+    from datetime import date, datetime
+    from decimal import Decimal
+    row = dict(mapping)
+    for k, v in row.items():
+        if isinstance(v, _uuid_mod.UUID):
+            row[k] = str(v)
+        elif isinstance(v, datetime):
+            row[k] = v.isoformat()
+        elif isinstance(v, date):
+            row[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            row[k] = float(v)
+    return row
 
 
 def execute_write(sql: str, params: Optional[dict] = None) -> list[dict]:
@@ -128,7 +150,7 @@ def execute_write(sql: str, params: Optional[dict] = None) -> list[dict]:
         with engine.begin() as conn:
             result = conn.execute(text(sql), params or {})
             if result.returns_rows:
-                return [dict(row._mapping) for row in result]
+                return [_serialize_row(row._mapping) for row in result]
             return [{"status": "success"}]
     except Exception as e:  # pragma: no cover
         logger.error(f"alloydb.write_failed: {e}")

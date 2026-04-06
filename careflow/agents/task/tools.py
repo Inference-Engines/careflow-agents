@@ -9,11 +9,27 @@
 # In production, these will be replaced by AlloyDB/Toolbox integration.
 # ============================================================================
 
+import logging
 from datetime import datetime
 from typing import Optional
 
 from google.adk.tools import ToolContext
-from careflow.db.alloydb_client import query_dict, execute_write
+from careflow.db.alloydb_client import query_dict, execute_write, get_db_engine
+
+logger = logging.getLogger(__name__)
+
+
+def _is_db_available() -> bool:
+    """Check whether AlloyDB engine is configured and reachable.
+
+    ``query_dict`` returns ``[]`` for both "no engine" and "no rows". This
+    helper lets tool functions distinguish the two and avoid silently falling
+    back to mock when the DB is present but the query returned 0 rows.
+    """
+    return get_db_engine() is not None
+
+
+from careflow.agents.shared.patient_utils import resolve_patient_id as _resolve_patient_id
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +91,11 @@ _MOCK_MEDICATIONS = [
     },
 ]
 
-# 알려진 약물 상호작용 데이터베이스 (DM2 + HTN 환자용)
-# Known drug interaction database (for DM2 + HTN patients)
+# 오프라인 폴백 전용 상호작용 테이블 — RxNav API 장애 시에만 사용.
+# 평상시에는 NIH RxNav(DrugBank)가 권위 있는 소스이며, 여기는 백업.
+#
+# OFFLINE FALLBACK ONLY. Used only when the RxNav API is unreachable.
+# The authoritative source is NIH RxNav (DrugBank) via shared.rxnorm_api.
 _KNOWN_INTERACTIONS = {
     ("warfarin", "aspirin"): {
         "severity": "HIGH",
@@ -157,9 +176,7 @@ _MEDICATION_INFO = {
     },
 }
 
-# 자동 증가 ID 카운터 / Auto-increment ID counters
-_NEXT_MED_ID = len(_MOCK_MEDICATIONS) + 1
-_NEXT_TASK_ID = 1
+import uuid as _uuid
 
 
 # ---------------------------------------------------------------------------
@@ -168,19 +185,15 @@ _NEXT_TASK_ID = 1
 # ---------------------------------------------------------------------------
 
 def _get_next_med_id() -> str:
-    """다음 약물 ID 생성 / Generate next medication ID."""
-    global _NEXT_MED_ID
-    med_id = f"MED-{_NEXT_MED_ID:03d}"
-    _NEXT_MED_ID += 1
-    return med_id
+    """UUID4 기반 고유 mock 약물 ID — global counter 제거 (thread-safe).
+    Generate unique mock medication ID via UUID4 short suffix."""
+    return f"MED-{_uuid.uuid4().hex[:8]}"
 
 
 def _get_next_task_id() -> str:
-    """다음 태스크 ID 생성 / Generate next task ID."""
-    global _NEXT_TASK_ID
-    task_id = f"TASK-{_NEXT_TASK_ID:03d}"
-    _NEXT_TASK_ID += 1
-    return task_id
+    """UUID4 기반 고유 mock 태스크 ID — global counter 제거 (thread-safe).
+    Generate unique mock task ID via UUID4 short suffix."""
+    return f"TASK-{_uuid.uuid4().hex[:8]}"
 
 
 def _get_medications_from_state(tool_context: ToolContext) -> list:
@@ -225,9 +238,12 @@ def get_current_medications(
     Returns:
         dict with "status", "patient_id", "medication_count", and "medications" list.
     """
-    sql = "SELECT * FROM medications WHERE patient_id = :pid AND status = 'active'"
-    db_rows = query_dict(sql, {"pid": patient_id})
-    if db_rows:
+    patient_id = _resolve_patient_id(patient_id, tool_context)
+    # DB 가용 여부를 먼저 판정 — "DB 연결 실패"와 "결과 0건" 구분.
+    # Distinguish "DB unavailable" from "DB returned 0 rows".
+    if _is_db_available():
+        sql = "SELECT * FROM medications WHERE patient_id = :pid AND status = 'active'"
+        db_rows = query_dict(sql, {"pid": patient_id})
         return {
             "status": "success",
             "source": "alloydb",
@@ -236,6 +252,8 @@ def get_current_medications(
             "medications": db_rows,
         }
 
+    # AlloyDB 미설정 → mock fallback (로그에 source 명시).
+    logger.info("get_current_medications: alloydb unavailable, using mock")
     medications = _get_medications_from_state(tool_context)
 
     patient_meds = [
@@ -280,25 +298,33 @@ def add_medication(
     Returns:
         dict with "status", "medication_id", and created medication details.
     """
-    sql = """INSERT INTO medications (patient_id, name, dosage, frequency, timing, status, prescribed_date, notes)
-             VALUES (:pid, :name, :dos, :freq, :tim, 'active', CURRENT_DATE, :notes)
-             RETURNING id"""
-    db_rows = execute_write(sql, {
-        "pid": patient_id, "name": name, "dos": dosage, 
-        "freq": frequency, "tim": timing, "notes": notes or ""
-    })
-    if db_rows:
+    patient_id = _resolve_patient_id(patient_id, tool_context)
+    if _is_db_available():
+        sql = """INSERT INTO medications (patient_id, name, dosage, frequency, timing, status, prescribed_date, notes)
+                 VALUES (:pid, :name, :dos, :freq, :tim, 'active', CURRENT_DATE, :notes)
+                 RETURNING id"""
+        db_rows = execute_write(sql, {
+            "pid": patient_id, "name": name, "dos": dosage,
+            "freq": frequency, "tim": timing, "notes": notes or ""
+        })
+        if db_rows:
+            return {
+                "status": "success",
+                "source": "alloydb",
+                "medication_id": str(db_rows[0]["id"]),
+                "name": name,
+                "dosage": dosage,
+                "frequency": frequency,
+                "timing": timing,
+                "message": f"Medication '{name} {dosage}' added successfully.",
+            }
         return {
-            "status": "success",
+            "status": "error",
             "source": "alloydb",
-            "medication_id": str(db_rows[0]["id"]),
-            "name": name,
-            "dosage": dosage,
-            "frequency": frequency,
-            "timing": timing,
-            "message": f"Medication '{name} {dosage}' added successfully.",
+            "message": f"Failed to insert medication '{name}' into AlloyDB.",
         }
 
+    logger.info("add_medication: alloydb unavailable, using mock")
     medications = _get_medications_from_state(tool_context)
 
     med_id = _get_next_med_id()
@@ -351,33 +377,40 @@ def update_medication_status(
     Returns:
         dict with "status", updated medication details, and "message".
     """
-    sql = """UPDATE medications
-             SET status = :status,
-                 dosage = COALESCE(:dosage, dosage),
-                 frequency = COALESCE(:frequency, frequency),
-                 timing = COALESCE(:timing, timing),
-                 updated_at = NOW()
-             WHERE id = :mid
-             RETURNING id, name, dosage, frequency, timing, status"""
-    db_rows = execute_write(sql, {
-        "status": new_status, "dosage": new_dosage,
-        "frequency": new_frequency, "timing": new_timing,
-        "mid": medication_id
-    })
-    if db_rows:
-        row = db_rows[0]
+    if _is_db_available():
+        sql = """UPDATE medications
+                 SET status = :status,
+                     dosage = COALESCE(:dosage, dosage),
+                     frequency = COALESCE(:frequency, frequency),
+                     timing = COALESCE(:timing, timing),
+                     updated_at = NOW()
+                 WHERE id = :mid
+                 RETURNING id, name, dosage, frequency, timing, status"""
+        db_rows = execute_write(sql, {
+            "status": new_status, "dosage": new_dosage,
+            "frequency": new_frequency, "timing": new_timing,
+            "mid": medication_id
+        })
+        if db_rows:
+            row = db_rows[0]
+            return {
+                "status": "success",
+                "source": "alloydb",
+                "medication_id": str(row["id"]),
+                "previous": "unknown (db updated)",
+                "updated": {
+                    "dosage": row.get("dosage"), "frequency": row.get("frequency"),
+                    "timing": row.get("timing"), "status": row.get("status")
+                },
+                "message": f"Medication '{row.get('name')}' updated to {new_status}."
+            }
         return {
-            "status": "success",
+            "status": "error",
             "source": "alloydb",
-            "medication_id": str(row["id"]),
-            "previous": "unknown (db updated)",
-            "updated": {
-                "dosage": row.get("dosage"), "frequency": row.get("frequency"),
-                "timing": row.get("timing"), "status": row.get("status")
-            },
-            "message": f"Medication '{row.get('name')}' updated to {new_status}."
+            "message": f"Medication '{medication_id}' not found in AlloyDB.",
         }
 
+    logger.info("update_medication: alloydb unavailable, using mock")
     medications = _get_medications_from_state(tool_context)
 
     target = None
@@ -448,23 +481,25 @@ def log_medication_change(
     Returns:
         dict with "status" and change log details.
     """
-    sql = """INSERT INTO medication_changes 
-             (medication_id, patient_id, change_type, previous_dosage, new_dosage, reason, changed_by)
-             VALUES (:mid, (SELECT patient_id FROM medications WHERE id = :mid LIMIT 1),
-                     :ctype, :pdos, :ndos, :rsn, 'task_agent')
-             RETURNING id"""
-    db_rows = execute_write(sql, {
-        "mid": medication_id, "ctype": change_type, "pdos": previous_dosage or None,
-        "ndos": new_dosage or None, "rsn": reason or ""
-    })
-    if db_rows:
-        return {
-            "status": "success",
-            "source": "alloydb",
-            "change_type": change_type,
-            "medication_id": medication_id,
-            "message": f"Change logged: {change_type} for {medication_id}.",
-        }
+    if _is_db_available():
+        sql = """INSERT INTO medication_changes
+                 (medication_id, patient_id, change_type, previous_dosage, new_dosage, reason, changed_by)
+                 VALUES (:mid, (SELECT patient_id FROM medications WHERE id = :mid LIMIT 1),
+                         :ctype, :pdos, :ndos, :rsn, 'task_agent')
+                 RETURNING id"""
+        db_rows = execute_write(sql, {
+            "mid": medication_id, "ctype": change_type, "pdos": previous_dosage or None,
+            "ndos": new_dosage or None, "rsn": reason or ""
+        })
+        if db_rows:
+            return {
+                "status": "success",
+                "source": "alloydb",
+                "change_type": change_type,
+                "medication_id": medication_id,
+                "message": f"Change logged: {change_type} for {medication_id}.",
+            }
+        logger.warning("log_medication_change: alloydb insert failed, using mock")
 
     change_log = tool_context.state.get("medication_change_log", [])
     entry = {
@@ -487,70 +522,256 @@ def log_medication_change(
     }
 
 
+def _severity_to_safety(severities: list[str]) -> str:
+    """RxNav severity 문자열을 내부 safety_check 레벨로 매핑.
+
+    Map RxNav severity strings to our internal safety_check level.
+    HIGH/CONTRAINDICATED/MAJOR and MODERATE/MEDIUM both surface as 'warning' —
+    a MODERATE interaction still warrants clinician review.
+    """
+    norm = {(s or "").strip().upper() for s in severities}
+    if norm & {"HIGH", "CONTRAINDICATED", "MAJOR"}:
+        return "warning"
+    if norm & {"MODERATE", "MEDIUM"}:
+        return "warning"
+    return "info"
+
+
+def _max_severity(severities: list[str]) -> str:
+    """severity 리스트에서 가장 심각한 레벨을 반환 (HITL payload 용).
+
+    Pick the most severe level from a list, ordered CONTRAINDICATED > HIGH >
+    MAJOR > MODERATE > MEDIUM > LOW > INFO. Used to populate the HITL trigger.
+    """
+    norm = {(s or "").strip().upper() for s in severities}
+    for level in ("CONTRAINDICATED", "HIGH", "MAJOR", "MODERATE", "MEDIUM", "LOW"):
+        if level in norm:
+            return level
+    return "INFO"
+
+
+def _classify_interaction_severity(normalized: list[dict]) -> str:
+    """severity 리스트에서 safety_check ("warning"/"info") 판정.
+
+    CONTRAINDICATED/HIGH/MAJOR/MODERATE/MEDIUM → warning (임상의 검토 필요).
+    """
+    norm_sev = {(i.get("severity") or "").upper() for i in normalized}
+    if norm_sev & {"CONTRAINDICATED", "HIGH", "MAJOR", "MODERATE", "MEDIUM"}:
+        return "warning"
+    return "info"
+
+
+def _trigger_hitl_if_needed(
+    tool_context: ToolContext,
+    safety_status: str,
+    normalized: list[dict],
+    source: str,
+) -> None:
+    """warning 수준 상호작용 감지 시 pending_hitl state에 HITL 트리거 설정."""
+    if tool_context is None or safety_status != "warning":
+        return
+    severities = [i.get("severity", "") for i in normalized]
+    tool_context.state["pending_hitl"] = {
+        "action_type": "drug_interaction_warning",
+        "severity": _max_severity(severities),
+        "interactions": normalized[:3],
+        "source": source,
+    }
+
+
+def _interaction_result_envelope(
+    status: str,
+    new_medication: str,
+    current_medications: list[str],
+    safety_check: str,
+    source: str,
+    interactions: list[dict],
+) -> dict:
+    """상호작용 결과 envelope 생성 — 3 layer 공통 반환 형식."""
+    return {
+        "status": status,
+        "new_medication": new_medication,
+        "checked_against": current_medications,
+        "safety_check": safety_check,
+        "source": source,
+        "interaction_count": len(interactions),
+        "interactions": interactions,
+    }
+
+
 def check_drug_interactions(
     new_medication: str,
     current_medications: list[str],
-    tool_context: ToolContext,
+    tool_context: ToolContext = None,
 ) -> dict:
-    """Check for drug interactions between a new medication and current ones.
+    """3-layer 약물 상호작용 검증 (openFDA → AlloyDB DDI → 하드코딩 폴백).
 
-    Rules-based interaction checking using a known interaction database.
-    In production, supplements with RxNorm / DrugBank API lookups.
+    Three-layer interaction check with graceful degradation:
 
-    새 약물과 현재 약물 간의 약물 상호작용을 확인합니다.
+      Layer 1 — openFDA Drug Labels (authoritative, real-time FDA SPL data).
+                Replaces the retired RxNav /interaction/list endpoint.
+      Layer 2 — Local DDI corpus in AlloyDB (optional; only if table populated).
+      Layer 3 — Hardcoded ``_KNOWN_INTERACTIONS`` table as last-resort offline
+                fallback when both network and DB are unavailable.
+
+    The first layer that produces a definitive answer short-circuits. Each
+    layer stamps its own ``source`` so downstream audit/telemetry can tell
+    where a given verdict came from.
 
     Args:
         new_medication: Name of the new medication to check.
-        current_medications: List of current medication names to check against.
-        tool_context: ADK ToolContext for state management.
+        current_medications: Current meds to check against.
+        tool_context: ADK ToolContext for state (audit log + HITL trigger).
 
     Returns:
-        dict with "status", "interactions_found" count, "interactions" list,
-        and overall "safety_check" result.
+        dict with:
+          - status: "interactions_detected" | "no_interactions"
+          - safety_check: "warning" | "info" | "passed"
+          - source: "openfda_drug_label" | "alloydb_ddi_corpus" | "local_fallback"
+          - interaction_count / interactions
     """
-    # 상호작용 조회 이력 기록 / Log interaction check history
-    check_log = tool_context.state.get("interaction_checks", [])
-    check_log.append({
-        "new_med": new_medication,
-        "checked_against": current_medications,
-        "checked_at": datetime.now().isoformat(),
-    })
-    tool_context.state["interaction_checks"] = check_log
+    # 조회 이력 기록 / Audit log entry.
+    if tool_context is not None:
+        check_log = tool_context.state.get("interaction_checks", [])
+        check_log.append({
+            "new_med": new_medication,
+            "checked_against": current_medications,
+            "checked_at": datetime.now().isoformat(),
+        })
+        tool_context.state["interaction_checks"] = check_log
 
+    # ==================================================================
+    # Layer 1 — openFDA Drug Labels (authoritative, real-time)
+    # ==================================================================
+    try:
+        logger.info("interaction_check.layer1.openfda.start drug=%s", new_medication)
+        from careflow.agents.shared.openfda_api import check_drug_interactions_via_fda
+
+        fda_result = check_drug_interactions_via_fda(new_medication, current_medications)
+        fda_status = fda_result.get("status")
+
+        if fda_status == "checked" and fda_result.get("interaction_count", 0) > 0:
+            interactions = fda_result["interactions"]
+            # 정규화된 출력 스키마로 재매핑 (medication1/medication2 키 일관성).
+            normalized: list[dict] = []
+            for hit in interactions:
+                pair = hit.get("drug_pair") or [new_medication, ""]
+                normalized.append({
+                    "medication1": pair[0],
+                    "medication2": pair[1] if len(pair) > 1 else "",
+                    "severity": hit.get("severity", "UNKNOWN"),
+                    "description": hit.get("description", ""),
+                    "source": hit.get("source", "openfda_drug_label"),
+                })
+
+            safety_status = _classify_interaction_severity(normalized)
+            _trigger_hitl_if_needed(tool_context, safety_status, normalized, "openfda_drug_label")
+            logger.info(
+                "interaction_check.layer1.openfda.hit count=%d severity=%s",
+                len(normalized), _max_severity([i.get("severity","") for i in normalized]),
+            )
+            return _interaction_result_envelope(
+                "interactions_detected", new_medication, current_medications,
+                safety_status, "openfda_drug_label", normalized,
+            )
+
+        if fda_status == "checked":
+            # 라벨은 조회됐고 상호작용 텍스트도 있었으나 현재 약물 언급 없음 → 확정적 "안전".
+            # Label retrieved and scanned, no current-drug mentions → definitive pass.
+            logger.info("interaction_check.layer1.openfda.clean drug=%s", new_medication)
+            return {
+                "status": "no_interactions",
+                "new_medication": new_medication,
+                "checked_against": current_medications,
+                "safety_check": "passed",
+                "source": "openfda_drug_label",
+                "interaction_count": 0,
+                "interactions": [],
+            }
+
+        # drug_not_found / no_interaction_data → Layer 2로 진행.
+        logger.info(
+            "interaction_check.layer1.openfda.inconclusive status=%s → fallthrough",
+            fda_status,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("interaction_check.layer1.openfda.failed: %s", e)
+
+    # ==================================================================
+    # Layer 2 — AlloyDB local DDI corpus (populated offline, if available)
+    # ==================================================================
+    try:
+        logger.info("interaction_check.layer2.alloydb.start")
+        current_lower = [d.strip().lower() for d in current_medications]
+        rows = query_dict(
+            """SELECT drug1, drug2, severity, description
+                 FROM drug_interactions
+                WHERE (LOWER(drug1) = LOWER(:d1) AND LOWER(drug2) = ANY(:d2_list))
+                   OR (LOWER(drug2) = LOWER(:d1) AND LOWER(drug1) = ANY(:d2_list))""",
+            {"d1": new_medication, "d2_list": current_lower},
+        )
+        if rows:
+            normalized = [{
+                "medication1": new_medication,
+                "medication2": (
+                    r.get("drug2")
+                    if (r.get("drug1") or "").lower() == new_medication.lower()
+                    else r.get("drug1")
+                ),
+                "severity": (r.get("severity") or "UNKNOWN").upper(),
+                "description": r.get("description") or "",
+                "source": "alloydb_ddi_corpus",
+            } for r in rows]
+
+            safety_status = _classify_interaction_severity(normalized)
+            _trigger_hitl_if_needed(tool_context, safety_status, normalized, "alloydb_ddi_corpus")
+            logger.info("interaction_check.layer2.alloydb.hit count=%d", len(normalized))
+            return _interaction_result_envelope(
+                "interactions_detected", new_medication, current_medications,
+                safety_status, "alloydb_ddi_corpus", normalized,
+            )
+        logger.info("interaction_check.layer2.alloydb.empty → fallthrough")
+    except Exception as e:  # noqa: BLE001
+        # 테이블 미존재/DB 미기동 — Layer 3로 계속 진행.
+        logger.info("interaction_check.layer2.alloydb.unavailable: %s", e)
+
+    # ==================================================================
+    # Layer 3 — Hardcoded offline fallback (last resort)
+    # ==================================================================
+    logger.info("interaction_check.layer3.local_fallback.start")
     new_med_lower = new_medication.strip().lower()
-    interactions = []
+    interactions: list[dict] = []
 
     for current_med in current_medications:
         current_lower = current_med.strip().lower()
-
-        # 양방향 조회 / Bidirectional lookup
-        key1 = (new_med_lower, current_lower)
-        key2 = (current_lower, new_med_lower)
-
-        interaction = _KNOWN_INTERACTIONS.get(key1) or _KNOWN_INTERACTIONS.get(key2)
-        if interaction:
+        hit = (
+            _KNOWN_INTERACTIONS.get((new_med_lower, current_lower))
+            or _KNOWN_INTERACTIONS.get((current_lower, new_med_lower))
+        )
+        if hit:
             interactions.append({
                 "medication1": new_medication,
                 "medication2": current_med,
-                **interaction,
+                "source": "local_fallback",
+                **hit,
             })
 
-    # 전체 안전 판정 / Overall safety determination
-    if any(i["severity"] == "HIGH" for i in interactions):
-        safety_check = "warning"
-    elif interactions:
-        safety_check = "info"
+    if interactions:
+        safety_check = _classify_interaction_severity(interactions)
+        status = "interactions_detected"
     else:
         safety_check = "passed"
+        status = "no_interactions"
 
-    return {
-        "status": "success",
-        "new_medication": new_medication,
-        "checked_against": current_medications,
-        "interactions_found": len(interactions),
-        "interactions": interactions,
-        "safety_check": safety_check,
-    }
+    _trigger_hitl_if_needed(tool_context, safety_check, interactions, "local_fallback")
+    logger.info(
+        "interaction_check.layer3.local_fallback.done hits=%d safety=%s",
+        len(interactions), safety_check,
+    )
+    return _interaction_result_envelope(
+        status, new_medication, current_medications,
+        safety_check, "local_fallback", interactions,
+    )
 
 
 def lookup_medication_info(
@@ -606,25 +827,33 @@ def create_task(
     Returns:
         dict with "status", "task_id", and created task details.
     """
-    sql = """INSERT INTO tasks (patient_id, description, due_date, priority, status, created_by_agent)
-             VALUES (:pid, :desc, :due, :prio, 'pending', 'task_agent')
-             RETURNING id"""
-    due_val = due_date if due_date else None
-    db_rows = execute_write(sql, {
-        "pid": patient_id, "desc": description + (f" (Notes: {notes})" if notes else ""),
-        "due": due_val, "prio": priority
-    })
-    if db_rows:
+    patient_id = _resolve_patient_id(patient_id, tool_context)
+    if _is_db_available():
+        sql = """INSERT INTO tasks (patient_id, description, due_date, priority, status, created_by_agent)
+                 VALUES (:pid, :desc, :due, :prio, 'pending', 'task_agent')
+                 RETURNING id"""
+        due_val = due_date if due_date else None
+        db_rows = execute_write(sql, {
+            "pid": patient_id, "desc": description + (f" (Notes: {notes})" if notes else ""),
+            "due": due_val, "prio": priority
+        })
+        if db_rows:
+            return {
+                "status": "success",
+                "source": "alloydb",
+                "task_id": str(db_rows[0]["id"]),
+                "description": description,
+                "due_date": due_date,
+                "priority": priority,
+                "message": f"Task created: '{description}' due {due_date} (priority: {priority}).",
+            }
         return {
-            "status": "success",
+            "status": "error",
             "source": "alloydb",
-            "task_id": str(db_rows[0]["id"]),
-            "description": description,
-            "due_date": due_date,
-            "priority": priority,
-            "message": f"Task created: '{description}' due {due_date} (priority: {priority}).",
+            "message": f"Failed to create task in AlloyDB.",
         }
 
+    logger.info("create_task: alloydb unavailable, using mock")
     tasks = tool_context.state.get("tasks", [])
 
     task_id = _get_next_task_id()
@@ -668,10 +897,11 @@ def get_pending_tasks(
     Returns:
         dict with "status", "patient_id", "task_count", and "tasks" list.
     """
-    sql = """SELECT * FROM tasks WHERE patient_id = :pid AND status IN ('pending', 'overdue')
-             ORDER BY CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, due_date"""
-    db_rows = query_dict(sql, {"pid": patient_id})
-    if db_rows:
+    patient_id = _resolve_patient_id(patient_id, tool_context)
+    if _is_db_available():
+        sql = """SELECT * FROM tasks WHERE patient_id = :pid AND status IN ('pending', 'overdue')
+                 ORDER BY CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, due_date"""
+        db_rows = query_dict(sql, {"pid": patient_id})
         return {
             "status": "success",
             "source": "alloydb",

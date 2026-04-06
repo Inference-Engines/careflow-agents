@@ -39,7 +39,7 @@ from careflow.agent import root_agent
 
 # 아래 시나리오 목록은 설계 문서의 9개 intent와 1:1 매핑.
 # These scenarios mirror the 9 intents from the design doc, one per intent.
-SCENARIOS: list[tuple[str, str]] = [
+SCENARIOS_FULL: list[tuple[str, str]] = [
     ("POST_VISIT",   "I went to the doctor today. Dr. Patel changed my Metformin to 1000mg twice daily. Need HbA1c test in 2 weeks."),
     ("INSIGHT",      "How has my blood pressure been trending over the past 3 months?"),
     ("DIET",         "What can I eat for lunch? My doctor said reduce sodium."),
@@ -49,6 +49,14 @@ SCENARIOS: list[tuple[str, str]] = [
     ("SCHEDULE",     "When is my next appointment?"),
     ("CAREGIVER",    "I am Priya, Rajesh's daughter. How has my father been doing this week?"),
     ("OFF_TOPIC",    "What is bitcoin price today?"),
+]
+
+# Rate limit 대응: --quick 플래그로 핵심 3개만 테스트 (기본), --full 로 전체 9개.
+# Rate limit mitigation: --quick for 3 core scenarios (default), --full for all 9.
+SCENARIOS = SCENARIOS_FULL if "--full" in sys.argv else [
+    SCENARIOS_FULL[0],  # POST_VISIT — 가장 복잡한 워크플로우
+    SCENARIOS_FULL[1],  # INSIGHT — Agentic RAG 경로
+    SCENARIOS_FULL[2],  # DIET — Diet agent 단일 라우팅
 ]
 
 
@@ -94,19 +102,29 @@ async def main() -> None:
         session_service=session_service,
     )
 
+    # Rajesh Sharma — 시드 환자 컨텍스트.  tool 함수들이 patient_id 기반으로 DB 쿼리하므로
+    # session state에 세팅해두어야 전 파이프라인이 실제 데이터 경로를 탄다.
+    _RAJESH_STATE = {
+        "current_patient_id": "11111111-1111-1111-1111-111111111111",
+        "patient_name": "Rajesh Sharma",
+    }
+
     for idx, (label, message) in enumerate(SCENARIOS):
         session_id = f"session_{idx}"
         await session_service.create_session(
-            app_name=app_name, user_id=user_id, session_id=session_id
+            app_name=app_name, user_id=user_id, session_id=session_id,
+            state=_RAJESH_STATE,
         )
         print("\n" + "=" * 70)
         print(f"[{label}] {message}")
         print("=" * 70)
         await _run_one(runner, user_id, session_id, message)
-        # Flash 는 1000 RPM 이라 3초면 충분. Pro 로 돌릴 땐 13초로 늘릴 것.
-        # Flash handles 1000 RPM, so 3s is enough. Bump to 13s when using Pro.
+        # Vertex AI free tier는 ~15 RPM Flash. 각 시나리오가 root + sub-agent + scope_judge
+        # 합쳐 5~10 call → 10초 간격이 안전. Billing enabled면 3초로 줄여도 됨.
+        # Vertex AI free tier ~15 RPM Flash. Each scenario fires 5-10 calls across
+        # root + sub-agent + scope_judge, so 10s gap is the safe minimum.
         if idx < len(SCENARIOS) - 1:
-            await asyncio.sleep(3)
+            await asyncio.sleep(10)
 
 
 if __name__ == "__main__":

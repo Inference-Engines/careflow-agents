@@ -8,7 +8,7 @@ Multi-agent healthcare post-visit care coordination system built on Google ADK.
 
 ## What this repo is
 
-This repo contains the **CareFlow agent source code** — the actual ADK `LlmAgent`, `SequentialAgent`, `ParallelAgent`, and `LoopAgent` implementations that power the system. Design docs, diagrams, and references live in the main architecture repo; datasets and download scripts live in the `Data` repo.
+This repo contains the **CareFlow agent source code** — the actual ADK `LlmAgent`, `SequentialAgent`, `ParallelAgent`, and `LoopAgent` implementations that power the system. All 8 sub-agents are fully implemented with real AlloyDB integration, Agentic RAG (HyDE + Hybrid + Self-RAG), openFDA drug interaction checking, and 7-layer safety.
 
 ## Architecture
 
@@ -22,14 +22,48 @@ root_agent (LlmAgent, gemini-2.5-flash)
 │   └── adherence_loop_agent    — LoopAgent (daily medication monitoring)
 │
 └── Standalone agents (single-intent routing)
-    ├── health_insight_agent
-    ├── diet_nutrition_agent
-    ├── symptom_triage_agent
-    ├── task_agent              (placeholder — to be wired on integration)
-    ├── schedule_agent          (placeholder — to be wired on integration)
-    ├── medical_info_agent      (placeholder — to be wired on integration)
-    └── caregiver_agent         (placeholder — to be wired on integration)
+    ├── health_insight_agent    — Trend analysis, proactive insights (AlloyDB timeseries)
+    ├── diet_nutrition_agent    — Personalized diet + food-drug interaction
+    ├── symptom_triage_agent    — 3-level urgency classification, safe defaults
+    ├── task_agent              — Medication extraction + openFDA 3-layer DDI
+    ├── schedule_agent          — Appointment booking & reminders
+    ├── medical_info_agent      — Agentic RAG (HyDE + Hybrid + Self-RAG) over visit history
+    └── caregiver_agent         — Caregiver notifications & status reports
 ```
+
+## Key Technical Features
+
+### Agentic RAG Pipeline (S-tier)
+```
+User Query
+  → HyDE (Gemini Flash generates hypothetical clinical note)
+  → Hybrid Search (pgvector Dense + PostgreSQL BM25 in parallel)
+  → RRF Fusion (Reciprocal Rank Fusion, k=60)
+  → Self-RAG Reflection (YES/PARTIAL/NO verdict per chunk)
+  → Confidence Tiering (HIGH ≥0.78 / MEDIUM 0.6-0.78 / LOW <0.6 refuse)
+  → Cross-patient post-retrieval assertion (defense-in-depth)
+```
+- Gemini `text-embedding-004` (768d) with **asymmetric task_type** (RETRIEVAL_DOCUMENT/QUERY)
+- HNSW index (m=16, ef_construction=64) on AlloyDB pgvector
+- 46-entry medical synonym map (symptoms, labs, DM2+HTN drug classes)
+- Graceful degradation: HyDE miss → raw query; BM25 miss → dense-only; embed fail → keyword
+
+### Drug Interaction (3-Layer Cascade)
+```
+Layer 1: openFDA Drug Labels API (real-time, FDA-authorized, free)
+Layer 2: AlloyDB DDI corpus (if loaded)
+Layer 3: Hardcoded _KNOWN_INTERACTIONS (offline last resort)
+```
+- Replaced deprecated RxNav API (404'd January 2024) with openFDA
+- Severity inference: contraindications → CONTRAINDICATED, warnings → HIGH, interactions → MODERATE
+- HITL trigger on any interaction detection
+
+### AlloyDB Integration
+- Real PostgreSQL with pgvector extension on Google Cloud AlloyDB
+- 10-table schema with UUID primary keys, timeseries health metrics
+- Rajesh Sharma seed data: 5 meds, 3 visits, 4 appointments, 360 health metrics (90-day)
+- `_serialize_row` handles UUID/date/Decimal → JSON-safe types
+- `_resolve_patient_id` maps LLM-generated placeholder IDs to real UUIDs
 
 ## Project structure
 
@@ -41,10 +75,15 @@ careflow/
 │   ├── diet_nutrition/             # Personalized diet + food-drug interaction
 │   ├── symptom_triage/             # 3-level urgency classification
 │   ├── adherence_loop/             # LoopAgent — medication monitoring
-│   └── safety/                     # SafetyPlugin, HITL, guardrails, scope judge
+│   ├── task/                       # Medication extraction + DDI (openFDA 3-layer)
+│   ├── schedule/                   # Appointment management
+│   ├── medical_info/               # Agentic RAG over visit history
+│   ├── caregiver/                  # Caregiver notifications
+│   ├── safety/                     # SafetyPlugin, HITL, guardrails, scope judge
+│   └── shared/                     # openfda_api, rxnorm_api, patient_utils
 ├── schemas/                        # Pydantic output schemas
-├── data/                           # ICD-11 mapping, RxNorm reference
-└── tests/                          # 22 unit tests
+├── db/                             # AlloyDB client (query_dict, execute_write)
+└── tests/                          # Unit tests
 ```
 
 ## Intent routing
@@ -63,13 +102,13 @@ careflow/
 
 ## Safety layers
 
-1. **Hybrid 2-Layer scope filter** — Fast regex prefilter + Gemini Flash LLM-as-Judge (Dr. Emily Watson's pattern)
+1. **Hybrid 2-Layer scope filter** — Fast regex prefilter + Gemini Flash LLM-as-Judge
 2. **Prompt injection detection** — 10 regex patterns
 3. **PII scan + masking** — Aadhaar, Indian phone, email (masked before reaching LLM)
-4. **Cross-patient access block** — session state validation
-5. **HITL gate** — 4-level risk (LOW/MED/HIGH/CRITICAL), confirmation loop with yes/no processing
-6. **Deterministic guardrails** — dosage range validation, allergy-food cross-check, symptom auto-escalation
-7. **Medical disclaimer auto-injection** — applied to any response touching diagnosis/prescription
+4. **Cross-patient access block** — UUID resolution + session state + post-retrieval assertion
+5. **HITL gate** — 4-level risk (LOW/MED/HIGH/CRITICAL), confirmation loop with yes/no
+6. **Deterministic guardrails** — dosage range, allergy-food cross-check, symptom auto-escalation
+7. **Medical disclaimer auto-injection** — dual-layer (safety plugin + per-agent)
 
 ## Quick start
 
@@ -84,8 +123,11 @@ gcloud config set project YOUR_PROJECT_ID
 # Run unit tests
 python -m pytest careflow/tests/ -v
 
-# Run end-to-end smoke test
+# Run end-to-end smoke test (3 core scenarios)
 python test_e2e.py
+
+# Run full 9-scenario test (needs higher rate limit)
+python test_e2e.py --full
 
 # Start ADK web UI
 adk web .
@@ -107,24 +149,20 @@ Sub-agents use Flash with per-agent temperature tuning:
 
 ## Team & integration
 
-| Agent | Owner | Branch |
+| Agent | Owner | Status |
 |---|---|---|
-| root_agent | Somi | `main` |
-| health_insight | Somi | `main` |
-| diet_nutrition | Somi | `main` |
-| symptom_triage | Somi | `main` |
-| adherence_loop | Somi | `main` (LoopAgent Pattern 6) |
-| safety + HITL + guardrails | Somi | `main` |
-| schedule | Lavanya | `feature/schedule-agent` |
-| caregiver | Deeptesha | `feature/caregiver-agent` |
-| task | thatengineerguy | `feature/task-medical-info` |
-| medical_info (RAG) | thatengineerguy | `feature/task-medical-info` |
-
-Each teammate agent lands on its own feature branch. Placeholder stubs on `main` return realistic JSON so the full workflow runs end-to-end during development, and they get swapped out when feature branches are merged in.
-
-## Rate limit notes
-
-Vertex AI free tier is ~5 RPM for Pro and ~15 RPM for Flash. Enable billing and use Flash for the root agent to avoid 429 during demo.
+| root_agent + orchestration | Somi | ✅ Complete |
+| health_insight | Somi | ✅ Complete |
+| diet_nutrition | Somi | ✅ Complete |
+| symptom_triage | Somi | ✅ Complete |
+| adherence_loop (LoopAgent) | Somi | ✅ Complete |
+| safety + HITL + guardrails | Somi | ✅ Complete |
+| Agentic RAG (HyDE+Hybrid+Self-RAG) | Somi | ✅ Complete |
+| openFDA 3-layer DDI | Somi | ✅ Complete |
+| schedule | Lavanya | ✅ Integrated |
+| caregiver | Deeptesha | ✅ Integrated |
+| task | thatengineerguy | ✅ Integrated + Fixed |
+| medical_info (RAG) | thatengineerguy | ✅ Integrated + Rewritten |
 
 ---
 

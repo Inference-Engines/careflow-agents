@@ -46,17 +46,20 @@ logger = logging.getLogger(__name__)
 # Pre/post model-call guardrails and post-processing callbacks
 # ---------------------------------------------------------------------------
 
-# 금지 키워드 목록 — 진단/처방 행위 차단용
-# Blocked keywords — prevents diagnostic/prescriptive behavior
-_BLOCKED_KEYWORDS = [
-    "prescribe",
-    "diagnose",
-    "you have",
-    "you are suffering from",
-    "take this medication",
-    "stop taking",
-    "increase your dose",
-    "decrease your dose",
+# 금지 패턴 — regex 기반 (bare substring → false positive 방지).
+# Blocked patterns — regex-based to reduce false positives.
+import re as _re
+_BLOCKED_PATTERNS_INPUT = [
+    _re.compile(r"\b(please\s+)?prescribe\s+(me|this)\b", _re.IGNORECASE),
+    _re.compile(r"\b(please\s+)?diagnose\s+me\b", _re.IGNORECASE),
+    _re.compile(r"\b(what|which)\s+(disease|illness)\s+do\s+i\s+have\b", _re.IGNORECASE),
+    _re.compile(r"\byou\s+should\s+(stop|increase|decrease)\b", _re.IGNORECASE),
+]
+_BLOCKED_PATTERNS_OUTPUT = [
+    _re.compile(r"\byou\s+(have|are\s+suffering\s+from)\s+[a-z]", _re.IGNORECASE),
+    _re.compile(r"\bi\s+(prescribe|diagnose)\b", _re.IGNORECASE),
+    _re.compile(r"\b(increase|decrease)\s+your\s+dose\b", _re.IGNORECASE),
+    _re.compile(r"\byou\s+must\s+stop\s+taking\b", _re.IGNORECASE),
 ]
 
 # 의료 면책 조항 — 모든 인사이트에 자동 첨부
@@ -100,11 +103,12 @@ async def _before_model_guard(
         if parts and parts[0].text:
             last_user_text = parts[0].text.lower()
 
-    for keyword in _BLOCKED_KEYWORDS:
-        if keyword in last_user_text:
+    for pattern in _BLOCKED_PATTERNS_INPUT:
+        match = pattern.search(last_user_text)
+        if match:
             logger.warning(
-                "[HealthInsight] Blocked request containing '%s' from agent '%s'",
-                keyword,
+                "[HealthInsight] Blocked request matching '%s' from agent '%s'",
+                match.group(),
                 callback_context.agent_name,
             )
             return LlmResponse(
@@ -186,13 +190,13 @@ async def _after_model_postprocess(
 
     response_text = first_part.text
 
-    # --- 진단/처방 키워드 사후 검사 / Post-hoc diagnostic keyword check ---
-    response_lower = response_text.lower()
-    for keyword in _BLOCKED_KEYWORDS:
-        if keyword in response_lower:
+    # --- 진단/처방 패턴 사후 검사 / Post-hoc diagnostic pattern check ---
+    for pattern in _BLOCKED_PATTERNS_OUTPUT:
+        match = pattern.search(response_text)
+        if match:
             logger.warning(
                 "[HealthInsight] Post-model filter caught '%s' in response",
-                keyword,
+                match.group(),
             )
             blocked_response = {
                 "insight_type": "error",

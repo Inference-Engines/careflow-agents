@@ -45,16 +45,26 @@ logger = logging.getLogger(__name__)
 # Pre/post model-call guardrails and post-processing callbacks
 # ---------------------------------------------------------------------------
 
-# 금지 키워드 목록 — 진단/처방/범위 밖 행위 차단
-# Blocked keywords — prevents out-of-scope diagnostic/prescriptive behavior
-_BLOCKED_KEYWORDS = [
-    "diagnose",
-    "prognosis",
-    "you have",
-    "you are suffering from",
-    "stop taking",
-    "cure",
-    "guaranteed",
+# 금지 키워드 — 정규식 패턴 기반 (false positive 대폭 감소).
+# 이전: "stop taking" → "doctor said stop taking aspirin" 같은 정당한 문맥도 차단.
+# 수정: 명령형/진단형 패턴만 잡도록 regex anchor 사용.
+# Blocked patterns — regex-based to reduce false positives.
+# Before: bare substring "stop taking" also blocked "doctor said stop taking aspirin".
+# Now: only catches imperative/diagnostic patterns via regex anchors.
+import re as _re
+_BLOCKED_PATTERNS_INPUT = [
+    _re.compile(r"\b(please\s+)?diagnose\s+me\b", _re.IGNORECASE),
+    _re.compile(r"\b(can you|please)\s+(tell me my|give me a)\s+prognosis\b", _re.IGNORECASE),
+    _re.compile(r"\byou\s+should\s+stop\s+taking\b", _re.IGNORECASE),
+    _re.compile(r"\b(what|which)\s+(disease|illness)\s+do\s+i\s+have\b", _re.IGNORECASE),
+    _re.compile(r"\bguarantee(d|s)?\s+(cure|recovery|result)\b", _re.IGNORECASE),
+]
+_BLOCKED_PATTERNS_OUTPUT = [
+    _re.compile(r"\byou\s+(have|are\s+suffering\s+from)\s+[a-z]", _re.IGNORECASE),
+    _re.compile(r"\bi\s+diagnose\s+you\b", _re.IGNORECASE),
+    _re.compile(r"\byou\s+must\s+stop\s+taking\b", _re.IGNORECASE),
+    _re.compile(r"\bguaranteed\s+(cure|recovery)\b", _re.IGNORECASE),
+    _re.compile(r"\byour\s+prognosis\s+is\b", _re.IGNORECASE),
 ]
 
 # 태스크 에이전트 면책 조항 — 모든 약물 관련 응답에 자동 첨부
@@ -95,11 +105,12 @@ async def _before_model_guard(
         if parts and parts[0].text:
             last_user_text = parts[0].text.lower()
 
-    for keyword in _BLOCKED_KEYWORDS:
-        if keyword in last_user_text:
+    for pattern in _BLOCKED_PATTERNS_INPUT:
+        match = pattern.search(last_user_text)
+        if match:
             logger.warning(
-                "[Task] Blocked request containing '%s' from agent '%s'",
-                keyword,
+                "[Task] Blocked request matching '%s' from agent '%s'",
+                match.group(),
                 callback_context.agent_name,
             )
             return LlmResponse(
@@ -170,13 +181,13 @@ async def _after_model_postprocess(
 
     response_text = first_part.text
 
-    # --- 진단/처방 키워드 사후 검사 / Post-hoc diagnostic keyword check ---
-    response_lower = response_text.lower()
-    for keyword in _BLOCKED_KEYWORDS:
-        if keyword in response_lower:
+    # --- 진단/처방 패턴 사후 검사 / Post-hoc diagnostic pattern check ---
+    for pattern in _BLOCKED_PATTERNS_OUTPUT:
+        match = pattern.search(response_text)
+        if match:
             logger.warning(
                 "[Task] Post-model filter caught '%s' in response",
-                keyword,
+                match.group(),
             )
             blocked_response = {
                 "action": "error",
@@ -193,6 +204,23 @@ async def _after_model_postprocess(
                     parts=[types.Part(text=json.dumps(blocked_response, ensure_ascii=False))],
                 )
             )
+
+    # --- HITL structured trigger — pending_hitl state 확인 / check pending_hitl ---
+    # check_drug_interactions 등 tool이 pending_hitl을 state에 설정한 경우,
+    # 해당 상호작용 경고를 응답 텍스트에 삽입하여 임상의/사용자 확인을 유도.
+    pending = callback_context.state.get("pending_hitl")
+    if pending and isinstance(pending, dict):
+        hitl_notice = (
+            f"\n\n⚠️ **CLINICIAN REVIEW REQUIRED** — {pending.get('action_type', 'drug interaction')} "
+            f"detected (severity: {pending.get('severity', 'UNKNOWN')}, "
+            f"source: {pending.get('source', 'unknown')}). "
+            f"Please confirm with your healthcare provider before proceeding."
+        )
+        response_text = response_text + hitl_notice
+        first_part.text = response_text
+        # 한 번 소비 후 제거 — 중복 경고 방지
+        callback_context.state["pending_hitl"] = None
+        logger.info("[Task] HITL notice injected: %s", pending.get("severity"))
 
     # --- JSON 응답 후처리 / JSON response post-processing ---
     try:
