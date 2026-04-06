@@ -26,8 +26,8 @@ sources:
     kind: postgres
     host: ${DB_HOST}
     port: 5432
-    database: careflow
-    user: postgres
+    database: ${DB_NAME}
+    user: ${DB_USER}
     password: ${DB_PASSWORD}
 
 # -----------------------------------------------------------------------------
