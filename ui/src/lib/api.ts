@@ -135,3 +135,17 @@ export async function fetchCaregiver(): Promise<Caregiver | null> {
         `/api/caregiver?patient_id=${PATIENT_ID}`,
     );
 }
+
+export interface DrugInteraction {
+    drug1: string;
+    drug2: string;
+    severity: 'CONTRAINDICATED' | 'HIGH' | 'MODERATE';
+    description: string;
+    source: string;
+}
+
+export async function fetchDrugInteractions(): Promise<DrugInteraction[]> {
+    return apiFetchArray<DrugInteraction>(
+        `/api/drug-interactions?patient_id=${PATIENT_ID}`,
+    );
+}

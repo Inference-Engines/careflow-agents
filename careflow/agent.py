@@ -1,35 +1,36 @@
-"""CareFlow Root Agent — 전체 오케스트레이터.
+"""CareFlow Root Agent — 멀티에이전트 오케스트레이터 / Multi-Agent Orchestrator.
 
-ADK 진입점. `adk web` 또는 `adk run`으로 실행 시 이 파일의 `root_agent` 변수를
-자동으로 로드한다. 8개 서브에이전트 + 안전 레이어 + MCP 통합 완료.
+Google ADK 기반 멀티에이전트 아키텍처. 루트 LlmAgent가 9가지 인텐트를 분류하고,
+SequentialAgent·ParallelAgent·LoopAgent 조합으로 임상 워크플로우를 실행한다.
+ADK 진입점: `adk web` 또는 `adk run` 실행 시 이 모듈의 `root_agent`를 자동 로드.
 
-All 8 sub-agents (fully implemented):
-    - health_insight_agent   : trend analysis, proactive insights (AlloyDB)
-    - diet_nutrition_agent   : personalized diet + food-drug interaction
-    - symptom_triage_agent   : 3-level urgency classification, safe defaults
-    - adherence_loop_agent   : LoopAgent — daily medication monitoring
-    - task_agent             : medication extraction + openFDA 3-layer DDI
-    - schedule_agent         : appointment booking + Google Calendar MCP
-    - medical_info_agent     : Agentic RAG (HyDE+Hybrid+RRF+Self-RAG)
-    - caregiver_agent        : caregiver notifications + Gmail MCP
+Multi-agent architecture built on Google ADK. A root LlmAgent classifies
+9 patient intents and delegates to composite workflows (Sequential, Parallel,
+Loop) that mirror real clinical care coordination patterns.
 
-ADK single-parent constraint: 모든 워크플로우용 인스턴스는 팩토리로 매번 새로
-생성한다. 동일 인스턴스를 여러 parent 아래에 두면 런타임 에러가 난다.
+Sub-agents (8 total, each with dedicated Google Cloud integration):
+    ┌─ health_insight_agent   : 건강 추세 분석 / AlloyDB time-series trends
+    ├─ diet_nutrition_agent   : 식이 관리 / personalized diet + food-drug interaction
+    ├─ symptom_triage_agent   : 증상 분류 / 3-level urgency (Red/Yellow/Green)
+    ├─ adherence_loop_agent   : 복약 모니터링 / LoopAgent — daily med adherence
+    ├─ task_agent             : 처방 추출 / medication extraction + openFDA DDI
+    ├─ schedule_agent         : 일정 관리 / Google Calendar MCP integration
+    ├─ medical_info_agent     : 의료 정보 검색 / Agentic RAG (HyDE+RRF+Self-RAG)
+    └─ caregiver_agent        : 보호자 알림 / Gmail MCP notifications
 
-설계 문서 / Design doc: CareFlow_System_Design_EN_somi.md
+ADK single-parent 제약: 팩토리 패턴으로 워크플로우마다 새 인스턴스 생성.
+ADK single-parent constraint: factory pattern creates fresh instances per workflow.
 """
 
 from __future__ import annotations
 
-# Rate limiter — 429 방어 (임포트만으로 자동 적용)
-# Import alone auto-patches genai Client with retry + backoff
+# ── Rate Limiter — 429 방어 / 429 RESOURCE_EXHAUSTED Protection ─────────────
+# genai Client 생성 전에 임포트해야 자동으로 retry + exponential backoff 적용됨.
+# Must be imported before any genai Client — auto-patches with retry logic.
 import careflow.rate_limiter  # noqa: F401
 
 import os
-
-# ─── Rate limiter: MUST be imported before any genai Client is created ───
-# 429 RESOURCE_EXHAUSTED 방어: genai Client 생성 전에 반드시 임포트해야 함
-import careflow.rate_limiter  # noqa: F401 — auto-patches google.genai on import
+from datetime import datetime
 
 from google.adk.agents import LlmAgent, SequentialAgent, ParallelAgent, LoopAgent
 from google.genai import types
@@ -71,13 +72,15 @@ from careflow.agents.safety.plugin import before_model_callback, after_model_cal
 # on every call (using factories like build_task_agent) so each workflow gets its own object.
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 워크플로우 정의 — Sequential / Parallel / Loop 조합
-# Workflow definitions — Sequential / Parallel / Loop composition
-# ─────────────────────────────────────────────────────────────────────────────
+# ── 워크플로우 정의 / Workflow Definitions ───────────────────────────────────
+# ADK의 Sequential·Parallel·Loop 패턴을 조합하여 임상 워크플로우를 구현.
+# Composite ADK patterns (Sequential / Parallel / Loop) model clinical workflows.
 
-# POST_VISIT: [Task ∥ Schedule] → Medical Info → Diet → Caregiver
-# 병렬로 추출하고 순차적으로 후처리하는 전형적인 post-visit 파이프라인.
+# ── 포스트-비짓 워크플로우 / Post-Visit Workflow ──────────────────────────────
+# ParallelAgent로 Task+Schedule을 동시 실행 후, SequentialAgent로
+# MedicalInfo→Diet→Caregiver 순차 처리. 실제 임상 사후관리 흐름을 반영.
+# Parallel extraction (Task+Schedule), then sequential enrichment
+# (MedicalInfo→Diet→Caregiver) mirrors real clinical post-visit flow.
 post_visit_parallel = ParallelAgent(
     name="post_visit_parallel",
     sub_agents=[build_task_agent(suffix="_pv"), build_schedule_agent(suffix="_pv")],
@@ -95,7 +98,9 @@ post_visit_sequential = SequentialAgent(
     description="Full post-visit workflow: parallel extract → medical info → diet → caregiver",
 )
 
-# PRE_VISIT: Health Insight ∥ Medical Info → 의사용 사전 요약
+# ── 사전-방문 워크플로우 / Pre-Visit Workflow ─────────────────────────────────
+# 건강 추세 + 의료 기록을 병렬 조회하여 의사에게 사전 요약 제공.
+# Parallel fetch of health trends + medical records for pre-visit briefing.
 pre_visit_parallel = ParallelAgent(
     name="pre_visit_parallel",
     sub_agents=[
@@ -105,7 +110,9 @@ pre_visit_parallel = ParallelAgent(
     description="Health insight analysis and medical records retrieval in parallel",
 )
 
-# SYMPTOM: Triage → (필요 시) Caregiver 에스컬레이션
+# ── 증상 보고 워크플로우 / Symptom Report Workflow ────────────────────────────
+# 증상 분류 후 위험도가 높으면 보호자에게 자동 에스컬레이션 (SequentialAgent).
+# Triage first, then auto-escalate to caregiver if urgency is Red/Yellow.
 symptom_workflow = SequentialAgent(
     name="symptom_workflow",
     sub_agents=[
@@ -116,10 +123,11 @@ symptom_workflow = SequentialAgent(
 )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Root Agent 프롬프트 — 9 인텐트 라우팅
-# Root Agent prompt — 9-intent routing
-# ─────────────────────────────────────────────────────────────────────────────
+# ── 루트 에이전트 프롬프트 — 9가지 인텐트 라우팅 / Root Prompt — 9-Intent Router ──
+# 환자 메시지를 9가지 인텐트로 분류하고, 적합한 서브에이전트/워크플로우에 위임.
+# Classifies patient messages into 9 intents and delegates to the right sub-agent.
+# 인텐트 우선순위: SYMPTOM_REPORT > POST_VISIT > 나머지 (환자 안전 최우선)
+# Intent priority: SYMPTOM_REPORT > POST_VISIT > others (patient safety first).
 BOSS_INSTRUCTION = """You are CareFlow's Root Agent — the central orchestrator for a healthcare
 post-visit care coordination system designed for chronic disease patients
 (Type 2 Diabetes + Hypertension).
@@ -128,6 +136,8 @@ post-visit care coordination system designed for chronic disease patients
 Receive user input (voice-transcribed text or direct text), classify the intent,
 and delegate to the appropriate sub-agent. Synthesize the final response in
 clear, patient-friendly language.
+
+Today's date: {current_date} ({current_weekday}). Use this as reference for all date calculations.
 
 ## Intent Classification
 Classify the user's message into exactly ONE intent and delegate:
@@ -193,45 +203,45 @@ Use simple language suitable for a 63-year-old patient.
 """
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Root Agent 조립 — ADK 진입점
-# Root Agent assembly — ADK entry point
-# ─────────────────────────────────────────────────────────────────────────────
-# 모델 토글: 기본은 Flash (빠르고 무료 tier rate-limit 여유). Pro 로 전환하려면
-# 환경변수 CAREFLOW_ROOT_MODEL=gemini-2.5-pro 로 실행.
+# ── 루트 에이전트 조립 — ADK 진입점 / Root Agent Assembly — ADK Entry Point ───
+# 모델 토글: Flash가 기본 (빠르고 무료 Tier 여유). Pro는 환경변수로 전환.
+# Model toggle: Flash default (fast + free-tier friendly). Set
+# CAREFLOW_ROOT_MODEL=gemini-2.5-pro to switch.
 _ROOT_MODEL = os.getenv("CAREFLOW_ROOT_MODEL", "gemini-2.5-flash")
+
+# 동적 날짜 주입 — LLM이 "오늘"을 올바르게 인식하도록 프롬프트에 삽입.
+# Dynamic date injection — so the LLM can reason about "today" correctly.
+_now = datetime.now()
+_BOSS_INSTRUCTION_FORMATTED = BOSS_INSTRUCTION.format(
+    current_date=_now.strftime("%Y-%m-%d"),
+    current_weekday=_now.strftime("%A"),
+)
 
 root_agent = LlmAgent(
     name="root_agent",
     model=_ROOT_MODEL,
-    instruction=BOSS_INSTRUCTION,
+    instruction=_BOSS_INSTRUCTION_FORMATTED,
     description="CareFlow Root Agent — orchestrates all sub-agents for post-visit care coordination",
     sub_agents=[
-        # 복합 워크플로우 / composite workflows
-        post_visit_sequential,
-        pre_visit_parallel,
-        symptom_workflow,
-        adherence_loop_agent,  # LoopAgent — Pattern 6 (medication adherence)
-        # 단일 인텐트 standalone / single-intent standalone agents
-        #
-        # ADK single-parent 제약: 워크플로우에 들어간 인스턴스와는 별개로 새
-        # 인스턴스를 생성해 root 에 직접 등록. 이렇게 해야 INSIGHT_REQUEST,
-        # DIET_QUERY 같은 단일 인텐트가 워크플로우를 거치지 않고 바로 해당
-        # 에이전트로 위임될 수 있다.
+        # ── 복합 워크플로우 / Composite Workflows ────────────────────────
+        post_visit_sequential,    # POST_VISIT 인텐트 → 5단계 파이프라인
+        pre_visit_parallel,       # PRE_VISIT 인텐트 → 병렬 사전 요약
+        symptom_workflow,         # SYMPTOM_REPORT 인텐트 → 분류 + 에스컬레이션
+        adherence_loop_agent,     # ADHERENCE_CHECK → LoopAgent 반복 확인
+        # ── 독립 에이전트 / Standalone Agents ────────────────────────────
+        # ADK single-parent 제약으로 워크플로우용과 별도 인스턴스 필요.
+        # Fresh instances (factory pattern) avoid ADK single-parent violation.
         build_health_insight_agent(suffix="_standalone"),
         build_diet_nutrition_agent(suffix="_standalone"),
         build_symptom_triage_agent(suffix="_standalone"),
-        # 통합 완료된 팀원 에이전트 / Integrated teammate agents
         build_task_agent(suffix="_standalone"),
         build_schedule_agent(suffix="_standalone"),
         build_medical_info_agent(suffix="_standalone"),
         build_caregiver_agent(suffix="_standalone"),
     ],
-    generate_content_config=types.GenerateContentConfig(
-        temperature=0.3,
-        # Root 는 라우팅 + 요약을 담당하므로 JSON 강제 안 함.
-        # Root handles routing + summarization, so no forced JSON mime type.
-    ),
+    # temperature 0.3: 라우팅 정확도를 위해 낮게, 요약 자연스러움 유지.
+    # Low temperature for routing accuracy while keeping summaries natural.
+    generate_content_config=types.GenerateContentConfig(temperature=0.3),
     before_model_callback=before_model_callback,
     after_model_callback=after_model_callback,
 )

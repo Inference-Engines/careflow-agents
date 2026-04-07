@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { cn } from '@/src/lib/utils';
+import { t, setLang, getLang } from '../lib/i18n';
+import type { Lang } from '../lib/i18n';
 
 interface SidebarProps {
     activeView: string;
@@ -10,38 +12,72 @@ interface SidebarProps {
 const navItems = [
     {
         id: 'dashboard',
-        label: 'My Health',
+        labelKey: 'home',
         iconActive: 'solar:widget-bold',
         iconIdle: 'solar:widget-linear',
     },
     {
         id: 'medication',
-        label: 'Visit Notes',
+        labelKey: 'my_visits',
         iconActive: 'solar:document-text-bold',
         iconIdle: 'solar:document-text-linear',
     },
     {
         id: 'insights',
-        label: 'Doctor View',
+        labelKey: 'doctor_view',
         iconActive: 'solar:chart-square-bold',
         iconIdle: 'solar:chart-square-linear',
     },
     {
         id: 'schedule',
-        label: 'Schedule',
+        labelKey: 'schedule',
         iconActive: 'solar:calendar-bold',
         iconIdle: 'solar:calendar-linear',
     },
 ];
 
 const mobileNavItems = [
-    { id: 'dashboard', label: 'My Health', icon: 'solar:widget-bold' },
-    { id: 'medication', label: 'Visit Notes', icon: 'solar:document-text-bold' },
-    { id: 'insights', label: 'Doctor View', icon: 'solar:chart-square-bold' },
-    { id: 'schedule', label: 'Schedule', icon: 'solar:calendar-bold' },
+    { id: 'dashboard', labelKey: 'home', icon: 'solar:widget-bold' },
+    { id: 'medication', labelKey: 'my_visits', icon: 'solar:document-text-bold' },
+    { id: 'insights', labelKey: 'doctor_view', icon: 'solar:chart-square-bold' },
+    { id: 'schedule', labelKey: 'schedule', icon: 'solar:calendar-bold' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
+    const [darkMode, setDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [showSupportModal, setShowSupportModal] = useState(false);
+    const [language, setLanguage] = useState<Lang>(getLang());
+    const [, forceUpdate] = useState(0);
+    const [textSize, setTextSize] = useState<'normal' | 'large' | 'xl'>('normal');
+    const [colorVision, setColorVision] = useState<'normal' | 'colorblind-deutan' | 'high-contrast'>(() => {
+        if (document.documentElement.classList.contains('colorblind-deutan')) return 'colorblind-deutan';
+        if (document.documentElement.classList.contains('high-contrast')) return 'high-contrast';
+        return 'normal';
+    });
+
+    useEffect(() => {
+        if (darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [darkMode]);
+
+    useEffect(() => {
+        const sizeMap = { normal: '16px', large: '18px', xl: '20px' };
+        document.documentElement.style.fontSize = sizeMap[textSize];
+    }, [textSize]);
+
+    useEffect(() => {
+        document.documentElement.classList.remove('colorblind-deutan', 'high-contrast');
+        if (colorVision !== 'normal') {
+            document.documentElement.classList.add(colorVision);
+        }
+    }, [colorVision]);
+
+    const toggleDarkMode = () => setDarkMode((prev) => !prev);
+
     return (
         <>
         <aside className="h-screen w-72 fixed left-0 top-0 bg-surface hidden lg:flex flex-col py-8 z-50 border-r border-[#1C6EF2]/5">
@@ -59,7 +95,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                             CareFlow AI
                         </h1>
                         <p className="text-xs text-slate-500 font-medium tracking-wide mt-0.5">
-                            Your Care Partner
+                            {t('care_partner')}
                         </p>
                     </div>
                 </div>
@@ -71,7 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                     </div>
                     <div className="min-w-0">
                         <p className="text-sm font-bold text-slate-900 tracking-tight truncate">Rajesh Sharma</p>
-                        <p className="text-xs text-slate-500 font-medium">63 yrs · DM2 + HTN</p>
+                        <p className="text-xs text-slate-500 font-medium">63 yrs · Diabetes & Blood Pressure</p>
                     </div>
                 </div>
             </div>
@@ -84,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                         <button
                             key={item.id}
                             onClick={() => onViewChange(item.id)}
-                            aria-label={`Navigate to ${item.label}`}
+                            aria-label={`Navigate to ${t(item.labelKey)}`}
                             style={{ animationDelay: `${i * 60}ms` }}
                             className={cn(
                                 'animate-reveal group flex items-center gap-3.5 w-full text-left px-4 py-3 rounded-2xl relative',
@@ -109,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                                         : 'group-hover:scale-105',
                                 )}
                             />
-                            <span>{item.label}</span>
+                            <span>{t(item.labelKey)}</span>
                             {isActive && (
                                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60" />
                             )}
@@ -118,46 +154,36 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                 })}
             </nav>
 
-            {/* Voice Assistant CTA */}
-            <div className="px-4 mb-5 animate-reveal stagger-4">
-                <button
-                    className="btn-primary w-full justify-center gap-3 py-3.5 active:scale-[0.98]"
-                    onClick={() => {
-                        window.dispatchEvent(new CustomEvent('careflow:voice-start'));
-                    }}
-                >
-                    <div className="btn-icon-wrap">
-                        <Icon icon="solar:microphone-bold" width={16} />
-                    </div>
-                    <span>Voice Assistant</span>
-                </button>
-            </div>
-
             {/* Settings / Support */}
             <div className="border-t border-surface-container px-4 pt-4 space-y-1 animate-reveal stagger-5">
-                {[
-                    { icon: 'solar:settings-linear', label: 'Settings' },
-                    { icon: 'solar:question-circle-linear', label: 'Support' },
-                ].map(({ icon, label }) => (
-                    <button
-                        key={label}
-                        onClick={() => alert(`${label} page coming soon.`)}
-                        className={cn(
-                            'flex items-center gap-3.5 text-slate-400 px-4 py-3 rounded-2xl w-full text-left text-sm font-medium min-h-[48px]',
-                            'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                            'hover:text-slate-700 hover:bg-surface-container-low',
-                        )}
-                    >
-                        <Icon icon={icon} width={18} className="shrink-0" />
-                        <span>{label}</span>
-                    </button>
-                ))}
+                <button
+                    onClick={() => setShowSettingsModal(true)}
+                    className={cn(
+                        'flex items-center gap-3.5 text-slate-400 px-4 py-3 rounded-2xl w-full text-left text-sm font-medium min-h-[48px]',
+                        'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                        'hover:text-slate-700 hover:bg-surface-container-low',
+                    )}
+                >
+                    <Icon icon="solar:settings-linear" width={18} className="shrink-0" />
+                    <span>{t('settings')}</span>
+                </button>
+                <button
+                    onClick={() => setShowSupportModal(true)}
+                    className={cn(
+                        'flex items-center gap-3.5 text-slate-400 px-4 py-3 rounded-2xl w-full text-left text-sm font-medium min-h-[48px]',
+                        'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                        'hover:text-slate-700 hover:bg-surface-container-low',
+                    )}
+                >
+                    <Icon icon="solar:question-circle-linear" width={18} className="shrink-0" />
+                    <span>{t('support')}</span>
+                </button>
             </div>
 
             {/* Powered by footer */}
             <div className="px-8 pt-4 mt-2">
                 <p className="text-xs text-slate-400 font-medium tracking-wide text-center">
-                    Powered by CareFlow AI
+                    {t('powered_by')}
                 </p>
             </div>
         </aside>
@@ -171,7 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                         <button
                             key={item.id}
                             onClick={() => onViewChange(item.id)}
-                            aria-label={`Navigate to ${item.label}`}
+                            aria-label={`Navigate to ${t(item.labelKey)}`}
                             className={cn(
                                 'flex flex-col items-center gap-1 px-3 py-2 rounded-2xl min-h-[48px] min-w-[64px]',
                                 'transition-all duration-300',
@@ -181,12 +207,148 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                             )}
                         >
                             <Icon icon={item.icon} width={22} />
-                            <span className="text-xs font-semibold tracking-tight">{item.label}</span>
+                            <span className="text-xs font-semibold tracking-tight">{t(item.labelKey)}</span>
                         </button>
                     );
                 })}
             </div>
         </nav>
+
+        {/* ── Settings Modal ─────────────────────────────────────────── */}
+        {showSettingsModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowSettingsModal(false)}>
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 space-y-6" onClick={(e) => e.stopPropagation()}>
+                    <h2 className="text-lg font-bold text-slate-900 tracking-tight">{t('settings')}</h2>
+
+                    {/* Dark Mode Toggle */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Icon icon={darkMode ? 'solar:moon-bold' : 'solar:sun-bold'} width={20} className="text-slate-600" />
+                            <span className="text-sm font-medium text-slate-700">{t('dark_mode')}</span>
+                        </div>
+                        <button
+                            onClick={toggleDarkMode}
+                            className={cn(
+                                'relative w-11 h-6 rounded-full transition-colors duration-300',
+                                darkMode ? 'bg-primary' : 'bg-slate-300',
+                            )}
+                            aria-label="Toggle dark mode"
+                        >
+                            <span className={cn(
+                                'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300',
+                                darkMode && 'translate-x-5',
+                            )} />
+                        </button>
+                    </div>
+
+                    {/* Language Selector */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Icon icon="solar:global-linear" width={20} className="text-slate-600" />
+                            <span className="text-sm font-medium text-slate-700">{t('language')}</span>
+                        </div>
+                        <select
+                            value={language}
+                            onChange={(e) => { const lang = e.target.value as Lang; setLanguage(lang); setLang(lang); forceUpdate(n => n + 1); }}
+                            className="text-sm font-medium text-slate-700 bg-surface-container-low rounded-xl px-3 py-1.5 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                            <option value="en">English</option>
+                            <option value="ko">한국어</option>
+                            <option value="hi">हिन्दी</option>
+                        </select>
+                    </div>
+
+                    {/* Text Size Slider */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                            <Icon icon="solar:text-field-linear" width={20} className="text-slate-600" />
+                            <span className="text-sm font-medium text-slate-700">{t('text_size')}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            {([['normal', 'Normal'], ['large', 'Large'], ['xl', 'Extra Large']] as const).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    onClick={() => setTextSize(value)}
+                                    className={cn(
+                                        'flex-1 text-xs font-semibold py-2 rounded-xl transition-all duration-300',
+                                        textSize === value
+                                            ? 'bg-primary text-white shadow-md'
+                                            : 'bg-surface-container-low text-slate-500 hover:bg-surface-container',
+                                    )}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Color Vision Selector */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                            <Icon icon="solar:eye-linear" width={20} className="text-slate-600" />
+                            <span className="text-sm font-medium text-slate-700">{t('color_vision')}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            {([['normal', 'Normal'], ['colorblind-deutan', 'Colorblind-friendly'], ['high-contrast', 'High Contrast']] as const).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    onClick={() => setColorVision(value)}
+                                    className={cn(
+                                        'flex-1 text-xs font-semibold py-2 rounded-xl transition-all duration-300',
+                                        colorVision === value
+                                            ? 'bg-primary text-white shadow-md'
+                                            : 'bg-surface-container-low text-slate-500 hover:bg-surface-container',
+                                    )}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Close */}
+                    <button
+                        onClick={() => setShowSettingsModal(false)}
+                        className="w-full py-2.5 rounded-xl bg-surface-container-low text-sm font-semibold text-slate-600 hover:bg-surface-container transition-colors duration-300"
+                    >
+                        {t('close')}
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {/* ── Support Modal ──────────────────────────────────────────── */}
+        {showSupportModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowSupportModal(false)}>
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+                    <h2 className="text-lg font-bold text-slate-900 tracking-tight">{t('support')}</h2>
+
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low">
+                            <Icon icon="solar:letter-linear" width={20} className="text-primary shrink-0" />
+                            <div>
+                                <p className="text-xs text-slate-500 font-medium">Email</p>
+                                <p className="text-sm font-semibold text-slate-700">support@careflow.health</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low">
+                            <Icon icon="solar:phone-linear" width={20} className="text-primary shrink-0" />
+                            <div>
+                                <p className="text-xs text-slate-500 font-medium">Phone</p>
+                                <p className="text-sm font-semibold text-slate-700">1800-CARE-FLOW</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => setShowSupportModal(false)}
+                        className="w-full py-2.5 rounded-xl bg-surface-container-low text-sm font-semibold text-slate-600 hover:bg-surface-container transition-colors duration-300"
+                    >
+                        {t('close')}
+                    </button>
+                </div>
+            </div>
+        )}
         </>
     );
 };

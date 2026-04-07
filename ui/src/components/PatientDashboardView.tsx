@@ -6,9 +6,10 @@ import DrugInteractionAlert from './DrugInteractionAlert';
 import AgentActivityFeed from './AgentActivityFeed';
 import { cn } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
+import { t } from '../lib/i18n';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
-import { fetchLatestMetric, fetchActiveMedications, fetchAppointments, markMedicationTaken } from '../lib/api';
-import type { MetricLatest, Medication, Appointment as ApiAppointment } from '../lib/api';
+import { fetchLatestMetric, fetchActiveMedications, fetchAppointments, markMedicationTaken, fetchDrugInteractions } from '../lib/api';
+import type { MetricLatest, Medication, Appointment as ApiAppointment, DrugInteraction } from '../lib/api';
 
 interface PatientDashboardViewProps {
     agentChat: UseAgentChatReturn;
@@ -16,31 +17,104 @@ interface PatientDashboardViewProps {
 }
 
 // Hardcoded fallback values
-const FALLBACK_BP = { value: '140/90', unit: 'mmHg', badge: 'Elevated', badgeColor: 'text-error bg-error-container', barWidth: '84%', barColor: 'bg-error' };
-const FALLBACK_GLUCOSE = { value: '128', unit: 'mg/dL', badge: 'Near Target', badgeColor: 'text-warning bg-warning/10', barWidth: '58%', barColor: 'bg-warning' };
+const FALLBACK_BP: VitalData = { value: '140/90', unit: 'mmHg', badgeKey: 'elevated', badgeColor: 'text-error bg-error-container', barWidth: '84%', barColor: 'bg-error' };
+const FALLBACK_GLUCOSE: VitalData = { value: '128', unit: 'mg/dL', badgeKey: 'near_target', badgeColor: 'text-warning bg-warning/10', barWidth: '58%', barColor: 'bg-warning' };
+
+interface VitalData { value: string; unit: string; badgeKey: string; badgeColor: string; barWidth: string; barColor: string; }
 const FALLBACK_MEDS: { name: string; dose: string; status?: string; time?: string; active?: boolean; dimmed?: boolean; id?: string }[] = [
-    { name: 'Metformin', dose: '1000mg · After Breakfast', status: 'Taken', time: '08:30 AM' },
-    { name: 'Aspirin', dose: '75mg · After Breakfast', status: 'Taken', time: '08:30 AM' },
+    { name: 'Metformin', dose: '1000mg · After Breakfast', status: 'taken', time: '08:30 AM' },
+    { name: 'Aspirin', dose: '75mg · After Breakfast', status: 'taken', time: '08:30 AM' },
     { name: 'Amlodipine', dose: '5mg · Before Lunch', active: true },
     { name: 'Lisinopril', dose: '10mg · After Lunch', time: 'Scheduled: 01:30 PM', dimmed: true },
     { name: 'Atorvastatin', dose: '20mg · Before Bed', time: 'Scheduled: 09:00 PM', dimmed: true },
 ];
-const FALLBACK_APPT = { title: 'HbA1c Test', date: 'Wednesday, April 17', time: '08:00 AM', location: 'Apollo Clinic, Mumbai', note: 'Fasting required', daysUntil: 'In 10 Days' };
+const FALLBACK_APPT = { title: 'HbA1c Test', date: 'Wednesday, April 17', time: '08:00 AM', location: 'Apollo Clinic, Mumbai', note: 'Fasting required', daysUntil: 'In 10 Days' as string };
 
 const SUGGESTED_PROMPTS = [
-    { text: "How am I doing today?", icon: "solar:heart-pulse-linear" },
-    { text: "Check my blood pressure trend", icon: "solar:graph-up-linear" },
-    { text: "What should I eat for lunch?", icon: "solar:fork-spoon-linear" },
-    { text: "When is my next appointment?", icon: "solar:calendar-linear" },
+    { textKey: 'prompt_1', icon: "solar:heart-pulse-linear" },
+    { textKey: 'prompt_2', icon: "solar:graph-up-linear" },
+    { textKey: 'prompt_3', icon: "solar:chef-hat-linear" },
+    { textKey: 'prompt_4', icon: "solar:calendar-linear" },
 ];
 
-const TYPING_MESSAGES = [
-    "Checking your health summary for today...",
-    "Your blood pressure is being monitored.",
-    "Metformin 1000mg — next dose at 1:00 PM.",
-    "Your HbA1c test is in 10 days.",
-    "Priya was notified about your last visit.",
-];
+const TYPING_MESSAGES_KEYS = ['typing_1', 'typing_2', 'typing_3', 'typing_4', 'typing_5'];
+
+/* -- JSON Response Fallback Parser ---------------------------------------- */
+/**
+ * Parses agent responses that may come back as JSON (from after_model callbacks
+ * or edge cases) and extracts human-readable text.
+ */
+function parseAgentResponse(raw: string): string {
+    const trimmed = raw.trim();
+
+    // Strip markdown code fences
+    let jsonStr = trimmed;
+    if (jsonStr.startsWith('```')) {
+        const lines = jsonStr.split('\n');
+        lines.shift(); // remove ```json
+        if (lines[lines.length - 1]?.trim() === '```') lines.pop();
+        jsonStr = lines.join('\n');
+    }
+
+    // Try JSON parse
+    if (jsonStr.startsWith('{') || jsonStr.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(jsonStr);
+            if (typeof parsed === 'object' && parsed !== null) {
+                // Extract readable fields
+                const textFields = ['message', 'text', 'answer', 'recommendation', 'response', 'summary', 'description'];
+                for (const field of textFields) {
+                    if (typeof parsed[field] === 'string' && parsed[field].length > 10) {
+                        let result: string = parsed[field];
+                        // Append warnings if present
+                        if (parsed.food_drug_warnings?.length) {
+                            result += '\n\n\u26A0\uFE0F Drug-Food Warnings:\n' + parsed.food_drug_warnings.map((w: any) => `\u2022 ${w.medication}: Avoid ${w.avoid_food} \u2014 ${w.reason}`).join('\n');
+                        }
+                        if (parsed.warnings?.length) {
+                            result += '\n\n\u26A0\uFE0F Warnings:\n' + parsed.warnings.map((w: any) => typeof w === 'string' ? `\u2022 ${w}` : `\u2022 ${JSON.stringify(w)}`).join('\n');
+                        }
+                        // Append disclaimer if present
+                        if (parsed.disclaimer) {
+                            result += '\n\n\uD83D\uDCCB ' + parsed.disclaimer;
+                        }
+                        return result;
+                    }
+                }
+
+                // For structured data like meal plans, format nicely
+                if (parsed.sample_meals) {
+                    let result = '';
+                    if (parsed.recommended_foods) result += '\u2705 Recommended: ' + parsed.recommended_foods.join(', ') + '\n\n';
+                    if (parsed.avoid_foods) result += '\u274C Avoid: ' + parsed.avoid_foods.join(', ') + '\n\n';
+                    if (parsed.sample_meals) {
+                        result += '\uD83C\uDF7D\uFE0F Sample Meals:\n';
+                        for (const [meal, desc] of Object.entries(parsed.sample_meals)) {
+                            result += `\u2022 ${meal.charAt(0).toUpperCase() + meal.slice(1)}: ${desc}\n`;
+                        }
+                    }
+                    if (parsed.disclaimer) result += '\n\uD83D\uDCCB ' + parsed.disclaimer;
+                    return result;
+                }
+
+                // For options arrays
+                if (parsed.options?.length) {
+                    let result = parsed.options.map((o: string, i: number) => `${i + 1}. ${o}`).join('\n');
+                    if (parsed.notes) result += '\n\n\uD83D\uDCDD ' + parsed.notes;
+                    if (parsed.disclaimer) result += '\n\n\uD83D\uDCCB ' + parsed.disclaimer;
+                    return result;
+                }
+
+                // Fallback: stringify nicely but remove technical fields
+                const { disclaimer, confidence, recommendation_type, constraints_applied, ...rest } = parsed;
+                return JSON.stringify(rest, null, 2);
+            }
+        } catch {
+            // Not valid JSON, return as-is
+        }
+    }
+
+    return raw;
+}
 
 /* -- Typing Animation Component ------------------------------------------ */
 const TypingAnimation: React.FC<{ texts: string[] }> = ({ texts }) => {
@@ -81,6 +155,35 @@ const TypingAnimation: React.FC<{ texts: string[] }> = ({ texts }) => {
     );
 };
 
+/* -- Health Tips Cycling Component ---------------------------------------- */
+const HEALTH_TIP_KEYS = ['tip_walking', 'tip_metformin', 'tip_dash', 'tip_sleep', 'tip_checkup'];
+const HEALTH_TIP_ICONS = ['\u{1F4A1}', '\u{1F48A}', '\u{1F957}', '\u{1F4A4}', '\u{1F3E5}'];
+
+const HealthTipsCycler: React.FC = () => {
+    const [tipIndex, setTipIndex] = useState(0);
+    const [fade, setFade] = useState(true);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setFade(false);
+            setTimeout(() => {
+                setTipIndex((prev) => (prev + 1) % HEALTH_TIP_KEYS.length);
+                setFade(true);
+            }, 300);
+        }, 4000);
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <p
+            className="text-xs text-slate-400 mt-2 transition-opacity duration-300"
+            style={{ opacity: fade ? 1 : 0 }}
+        >
+            {HEALTH_TIP_ICONS[tipIndex]} {t(HEALTH_TIP_KEYS[tipIndex])}
+        </p>
+    );
+};
+
 /* -- Skeleton Component -------------------------------------------------- */
 const Skeleton = ({ className }: { className?: string }) => (
     <div className={cn("animate-pulse skeleton-shimmer rounded-lg", className)} />
@@ -90,14 +193,13 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
     const { messages, status, sendMessage, agentActivities } = agentChat;
     const [inputText, setInputText] = useState('');
     const [takenMeds, setTakenMeds] = useState<Set<string>>(new Set());
-    const [chatExpanded, setChatExpanded] = useState(true);
     const [drugAlertsExpanded, setDrugAlertsExpanded] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // API-driven state with hardcoded fallbacks
-    const [bpData, setBpData] = useState(FALLBACK_BP);
-    const [glucoseData, setGlucoseData] = useState(FALLBACK_GLUCOSE);
+    const [bpData, setBpData] = useState<VitalData>(FALLBACK_BP);
+    const [glucoseData, setGlucoseData] = useState<VitalData>(FALLBACK_GLUCOSE);
     const [medsData, setMedsData] = useState(FALLBACK_MEDS);
     const [apptData, setApptData] = useState(FALLBACK_APPT);
     const [loading, setLoading] = useState(true);
@@ -105,42 +207,24 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
         { type: 'hypertensive_crisis' | 'hypoglycemia' | 'hyperglycemia'; message: string; value: string }[]
     >([]);
 
-    const drugInteractionAlerts = [
-        {
-            drug1: 'Metformin',
-            drug2: 'Lisinopril',
-            severity: 'MODERATE' as const,
-            description: 'Lisinopril may increase the hypoglycemic effect of Metformin. Monitor blood glucose closely, especially after dose changes.',
-            source: 'openFDA Drug Label',
-        },
-        {
-            drug1: 'Amlodipine',
-            drug2: 'Atorvastatin',
-            severity: 'MODERATE' as const,
-            description: 'Amlodipine may increase Atorvastatin blood levels, raising the risk of myopathy. Monitor for muscle pain or weakness.',
-            source: 'openFDA Drug Label',
-        },
-    ];
+    // Drug interaction alerts — fetched from the API (openFDA with fallback)
+    const [drugInteractionAlerts, setDrugInteractionAlerts] = useState<DrugInteraction[]>([]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-
-    // Auto-expand chat when messages arrive
-    useEffect(() => {
-        if (messages.length > 0) setChatExpanded(true);
-    }, [messages.length]);
 
     // Fetch live data on mount
     useEffect(() => {
         let mounted = true;
 
         async function loadData() {
-            const [bp, glucose, meds, appts] = await Promise.all([
+            const [bp, glucose, meds, appts, drugInteractions] = await Promise.all([
                 fetchLatestMetric('blood_pressure'),
                 fetchLatestMetric('blood_glucose'),
                 fetchActiveMedications(),
                 fetchAppointments(),
+                fetchDrugInteractions(),
             ]);
 
             if (!mounted) return;
@@ -154,7 +238,7 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                 setBpData({
                     value: cleanValue,
                     unit: bp.unit || 'mmHg',
-                    badge: isElevated ? 'Elevated' : 'Normal',
+                    badgeKey: isElevated ? 'elevated' as const : 'normal' as const,
                     badgeColor: isElevated ? 'text-error bg-error-container' : 'text-secondary bg-secondary-container',
                     barWidth: `${Math.min(100, Math.round((systolic / 180) * 100))}%`,
                     barColor: isElevated ? 'bg-error' : 'bg-secondary',
@@ -168,7 +252,7 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                 setGlucoseData({
                     value: String(gVal),
                     unit: glucose.unit || 'mg/dL',
-                    badge: isOptimal ? 'Normal' : isNearTarget ? 'Near Target' : 'Elevated',
+                    badgeKey: isOptimal ? 'normal' as const : isNearTarget ? 'near_target' as const : 'elevated' as const,
                     badgeColor: isOptimal ? 'text-secondary bg-secondary-container' : isNearTarget ? 'text-amber-600 bg-amber-50' : 'text-error bg-error-container',
                     barWidth: `${Math.min(100, Math.round((gVal / 250) * 100))}%`,
                     barColor: isOptimal ? 'bg-secondary' : isNearTarget ? 'bg-amber-400' : 'bg-error',
@@ -180,8 +264,8 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                     id: m.id,
                     name: m.name,
                     dose: m.dose + (m.schedule ? ` · ${m.schedule}` : ''),
-                    status: m.taken_today ? 'Taken' : undefined,
-                    time: m.taken_today ? 'Today' : undefined,
+                    status: m.taken_today ? 'taken' : undefined,
+                    time: m.taken_today ? 'today' : undefined,
                     active: !m.taken_today,
                     dimmed: false,
                 })));
@@ -192,7 +276,7 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                 const apptDate = new Date(next.date);
                 const now = new Date();
                 const diffDays = Math.ceil((apptDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                const daysLabel = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Tomorrow' : `In ${diffDays} Days`;
+                const daysLabel = diffDays === 0 ? t('today') : diffDays === 1 ? t('tomorrow') : `In ${diffDays} Days`;
                 setApptData({
                     title: next.title,
                     date: next.date,
@@ -201,6 +285,10 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                     note: next.note || '',
                     daysUntil: daysLabel,
                 });
+            }
+
+            if (drugInteractions?.length) {
+                setDrugInteractionAlerts(drugInteractions);
             }
 
             // Check emergency thresholds
@@ -249,7 +337,6 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
         const msg = (text || inputText).trim();
         if (!msg || status === 'streaming') return;
         setInputText('');
-        setChatExpanded(true);
         await sendMessage(msg);
     };
 
@@ -282,9 +369,9 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
             {/* -- Row 1: Welcome + Typing Animation ----------------------- */}
             <div className="mb-6 animate-reveal">
                 <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
-                    Namaste, Rajesh.
+                    {t('greeting')}
                 </h1>
-                <TypingAnimation texts={TYPING_MESSAGES} />
+                <TypingAnimation texts={TYPING_MESSAGES_KEYS.map(k => t(k))} />
             </div>
 
             {/* -- Row 2: Compact Vitals Chips (horizontal scroll) --------- */}
@@ -292,35 +379,67 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                 <VitalChip
                     icon="solar:heart-pulse-bold"
                     iconColor="text-red-500"
-                    label="BP"
+                    label={t('blood_pressure')}
                     value={loading ? '...' : bpData.value}
-                    badge={loading ? undefined : bpData.badge}
-                    badgeColor={bpData.badge === 'Elevated' ? 'text-red-600 bg-red-50' : 'text-secondary bg-secondary-container'}
+                    badge={loading ? undefined : t(bpData.badgeKey)}
+                    badgeColor={bpData.badgeKey === 'elevated' ? 'text-red-600 bg-red-50' : 'text-secondary bg-secondary-container'}
                 />
                 <VitalChip
                     icon="solar:water-bold"
                     iconColor="text-blue-500"
-                    label="Glucose"
+                    label={t('blood_glucose')}
                     value={loading ? '...' : `${glucoseData.value} ${glucoseData.unit}`}
-                    badge={loading ? undefined : glucoseData.badge}
-                    badgeColor={glucoseData.badge === 'Elevated' ? 'text-red-600 bg-red-50' : glucoseData.badge === 'Near Target' ? 'text-amber-600 bg-amber-50' : 'text-secondary bg-secondary-container'}
+                    badge={loading ? undefined : t(glucoseData.badgeKey)}
+                    badgeColor={glucoseData.badgeKey === 'elevated' ? 'text-red-600 bg-red-50' : glucoseData.badgeKey === 'near_target' ? 'text-amber-600 bg-amber-50' : 'text-secondary bg-secondary-container'}
                 />
                 <VitalChip
                     icon="solar:pill-bold"
                     iconColor="text-primary"
                     label="Next"
-                    value={loading ? '...' : 'Metformin 1:00 PM'}
+                    value={loading ? '...' : (() => {
+                        const nextMed = medsData.find(m => m.active || (!m.status && !m.time));
+                        return nextMed ? `${nextMed.name} ${nextMed.time || ''}`.trim() : 'All taken';
+                    })()}
                 />
                 <VitalChip
                     icon="solar:calendar-bold"
                     iconColor="text-violet-500"
-                    label="HbA1c"
+                    label={apptData.title}
                     value={loading ? '...' : apptData.daysUntil.toLowerCase()}
                 />
             </div>
 
-            {/* -- Row 3: CHAT (Main Focus) -------------------------------- */}
-            <div className="animate-reveal stagger-2 mb-5">
+            {/* -- Row 3: Contextual Action Cards (grid, above chat) ------- */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 animate-reveal stagger-2">
+                <ContextCard
+                    icon="solar:pill-bold"
+                    iconColor="bg-primary/10 text-primary"
+                    title={t('next_medication')}
+                    detail={loading ? t('loading') : `${medsData.find(m => m.active)?.name || 'All taken'}`}
+                    sub={loading ? '' : medsData.find(m => m.active)?.dose || 'Great job today'}
+                    onClick={() => onViewChange?.('schedule')}
+                />
+                <ContextCard
+                    icon="solar:shield-check-bold"
+                    iconColor="bg-amber-50 text-amber-600"
+                    title={t('safety_info')}
+                    detail={alertCount > 0 ? `${alertCount} ${t('interactions')}` : t('no_issues')}
+                    sub={alertCount > 0 ? t('tap_to_review') : t('all_clear')}
+                    onClick={() => setDrugAlertsExpanded(!drugAlertsExpanded)}
+                    highlight={alertCount > 0}
+                />
+                <ContextCard
+                    icon="solar:calendar-bold"
+                    iconColor="bg-violet-50 text-violet-600"
+                    title={t('next_visit')}
+                    detail={loading ? t('loading') : apptData.title}
+                    sub={loading ? '' : apptData.daysUntil}
+                    onClick={() => onViewChange?.('schedule')}
+                />
+            </div>
+
+            {/* -- Row 4: CHAT (Main Focus) -------------------------------- */}
+            <div className="animate-reveal stagger-3 mb-5">
                 <BentoCard
                     className="hover-lift"
                     innerClassName="flex flex-col p-0 overflow-hidden"
@@ -331,15 +450,15 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                         <div className="flex gap-2.5 overflow-x-auto pb-4 px-1 no-scrollbar">
                             {SUGGESTED_PROMPTS.map(prompt => (
                                 <button
-                                    key={prompt.text}
-                                    onClick={() => handleSend(prompt.text)}
+                                    key={prompt.textKey}
+                                    onClick={() => handleSend(t(prompt.textKey))}
                                     disabled={isStreaming}
                                     className="prompt-chip shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary/5 text-primary text-sm font-semibold
                                                border border-primary/12 min-h-[44px]
                                                disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
                                 >
                                     <Icon icon={prompt.icon} width={16} className="shrink-0 opacity-70" />
-                                    {prompt.text}
+                                    {t(prompt.textKey)}
                                 </button>
                             ))}
                         </div>
@@ -347,7 +466,7 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                         {/* Messages area */}
                         <div className={cn(
                             'flex-1 overflow-y-auto space-y-4 pr-1 transition-all duration-500',
-                            hasMessages && chatExpanded ? 'max-h-[60vh] mb-4' : hasMessages ? 'max-h-0 overflow-hidden' : 'max-h-0',
+                            hasMessages ? 'max-h-[70vh] mb-4' : 'max-h-0',
                         )}>
                             {messages.map((msg) => (
                                 <div
@@ -385,7 +504,21 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                                     >
                                         {msg.role === 'assistant' ? (
                                             <div className="prose prose-sm prose-slate max-w-none">
-                                                <ReactMarkdown>{msg.content || 'Let me look into that for you...'}</ReactMarkdown>
+                                                {msg.content ? (
+                                                    <ReactMarkdown>{parseAgentResponse(msg.content)}</ReactMarkdown>
+                                                ) : (
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm text-slate-500">{t('analyzing')}</span>
+                                                            <span className="flex items-center gap-1">
+                                                                <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+                                                                <span className="h-2 w-2 animate-bounce rounded-full bg-secondary" style={{ animationDelay: '150ms' }} />
+                                                                <span className="h-2 w-2 animate-bounce rounded-full bg-primary/60" style={{ animationDelay: '300ms' }} />
+                                                            </span>
+                                                        </div>
+                                                        <HealthTipsCycler />
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
                                             msg.content
@@ -405,108 +538,61 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                                     <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: '0ms'}} />
                                     <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: '150ms'}} />
                                     <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: '300ms'}} />
-                                    <span className="text-sm text-slate-400 ml-2">CareFlow is thinking...</span>
+                                    <span className="text-sm text-slate-400 ml-2">{t('careflow_thinking')}</span>
                                 </div>
                             )}
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Collapse toggle for messages */}
-                        {hasMessages && (
-                            <button
-                                onClick={() => setChatExpanded(!chatExpanded)}
-                                className="flex items-center justify-center gap-1.5 text-sm text-slate-400 hover:text-primary spring mb-3 mx-auto"
-                            >
-                                <Icon
-                                    icon={chatExpanded ? 'solar:alt-arrow-up-linear' : 'solar:alt-arrow-down-linear'}
-                                    width={16}
-                                />
-                                {chatExpanded ? 'Collapse' : `${messages.length} messages`}
-                            </button>
+                        {/* Agent Activity Feed — inside chat, between messages and input */}
+                        {(isStreaming || agentActivities.length > 0) && (
+                            <div className="mb-3">
+                                <AgentActivityFeed events={agentActivities} visible={true} />
+                                {agentActivities.length > 0 && agentActivities.every((e) => e.status === 'done') && (
+                                    <div className="flex items-center gap-2 text-xs text-secondary bg-secondary/5 border border-secondary/10 rounded-xl px-3 py-1.5 mt-2">
+                                        <Icon icon="solar:check-circle-bold" width={14} className="text-secondary shrink-0" />
+                                        <span>{t('analysis_complete')}</span>
+                                    </div>
+                                )}
+                            </div>
                         )}
 
-                        {/* Agent Activity Feed */}
-                        <AgentActivityFeed
-                            events={agentActivities}
-                            visible={isStreaming || agentActivities.length > 0}
-                        />
-
-                        {/* Input area */}
-                        <div className="relative">
+                        {/* Input area — clean flex row */}
+                        <div className="flex items-center gap-2 bg-surface-container-low rounded-2xl p-2">
                             <textarea
                                 ref={textareaRef}
                                 value={inputText}
                                 onChange={(e) => setInputText(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 disabled={isStreaming}
-                                rows={2}
-                                className={cn(
-                                    'w-full bg-surface-container-low border border-transparent rounded-2xl',
-                                    'p-4 pr-28 text-base focus:outline-none resize-none',
-                                    'placeholder:text-slate-300 disabled:opacity-60',
-                                    'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                                    'focus:border-primary/20 focus:bg-surface focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)]',
-                                )}
-                                placeholder={
-                                    isStreaming
-                                        ? 'CareFlow is responding...'
-                                        : 'Type a message or tap a suggestion above...'
-                                }
+                                rows={1}
+                                className="flex-1 bg-transparent px-3 py-2 text-base focus:outline-none resize-none placeholder:text-slate-300 disabled:opacity-60"
+                                placeholder={isStreaming ? t('responding') : t('type_message')}
                             />
-                            <div className="absolute bottom-3 right-3 flex gap-2 items-center">
-                                {isStreaming && (
-                                    <Icon
-                                        icon="solar:refresh-circle-bold"
-                                        width={18}
-                                        className="text-primary animate-spin"
-                                    />
-                                )}
-                                {/* Mic button */}
-                                <button
-                                    className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 spring"
-                                    aria-label="Voice input"
-                                >
-                                    <Icon icon="solar:microphone-bold" width={18} />
-                                </button>
-                                <button
-                                    id="send-message-btn"
-                                    onClick={() => handleSend()}
-                                    disabled={isStreaming || !inputText.trim()}
-                                    className="btn-primary py-2 px-5 text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                                >
-                                    <span>Send</span>
-                                    <div className="btn-icon-wrap">
-                                        <Icon icon="solar:arrow-up-bold" width={14} />
-                                    </div>
-                                </button>
-                            </div>
+                            <button
+                                className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors shrink-0"
+                                aria-label="Voice input"
+                                onClick={() => {
+                                    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                                    if (!SR) return;
+                                    const r = new SR(); r.lang = 'en-IN';
+                                    r.onresult = (e: any) => { const t = e.results[0][0].transcript; if (t) handleSend(t); };
+                                    r.start();
+                                }}
+                            >
+                                <Icon icon="solar:microphone-bold" width={16} />
+                            </button>
+                            <button
+                                onClick={() => handleSend()}
+                                disabled={isStreaming || !inputText.trim()}
+                                className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0 disabled:opacity-30"
+                                aria-label="Send"
+                            >
+                                <Icon icon="solar:arrow-up-bold" width={16} />
+                            </button>
                         </div>
                     </div>
                 </BentoCard>
-            </div>
-
-            {/* -- Row 4: Quick Actions (compact) -------------------------- */}
-            <div className="flex gap-3 overflow-x-auto no-scrollbar animate-reveal stagger-3">
-                <QuickActionCard
-                    icon="solar:pill-bold"
-                    iconColor="bg-primary/10 text-primary"
-                    label="Medications"
-                    count={activeMedCount}
-                    onClick={() => onViewChange?.('schedule')}
-                />
-                <QuickActionCard
-                    icon="solar:shield-warning-bold"
-                    iconColor="bg-amber-100 text-amber-600"
-                    label="Drug Alerts"
-                    count={alertCount}
-                    onClick={() => setDrugAlertsExpanded(!drugAlertsExpanded)}
-                />
-                <QuickActionCard
-                    icon="solar:calendar-bold"
-                    iconColor="bg-violet-100 text-violet-600"
-                    label="Schedule"
-                    onClick={() => onViewChange?.('schedule')}
-                />
             </div>
 
             {/* -- Drug Interaction Alerts (collapsible) -------------------- */}
@@ -514,8 +600,8 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                 <div className="mt-4 animate-reveal">
                     <div className="flex items-center gap-2.5 mb-3">
                         <Icon icon="solar:shield-warning-bold" width={18} className="text-amber-600" />
-                        <h3 className="text-base font-bold text-slate-900 tracking-tight">Drug Interaction Alerts</h3>
-                        <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight">{t('drug_alerts')}</h3>
+                        <span className="text-sm font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
                             {drugInteractionAlerts.length} found
                         </span>
                         <button
@@ -548,7 +634,7 @@ const VitalChip: React.FC<{
         <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-800 whitespace-nowrap">{label} {value}</span>
             {badge && (
-                <span className={cn('text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap', badgeColor)}>
+                <span className={cn('text-sm font-bold px-2 py-0.5 rounded-full whitespace-nowrap', badgeColor)}>
                     {badge}
                 </span>
             )}
@@ -556,30 +642,33 @@ const VitalChip: React.FC<{
     </div>
 );
 
-/** Quick action card for Row 4 */
-const QuickActionCard: React.FC<{
+/** Contextual action card — shows real data, not just a label */
+const ContextCard: React.FC<{
     icon: string;
     iconColor: string;
-    label: string;
-    count?: number;
+    title: string;
+    detail: string;
+    sub?: string;
     onClick?: () => void;
-}> = ({ icon, iconColor, label, count, onClick }) => (
+    highlight?: boolean;
+}> = ({ icon, iconColor, title, detail, sub, onClick, highlight }) => (
     <button
         onClick={onClick}
-        className="shrink-0 flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-white border border-slate-100
-                   shadow-[0_2px_8px_-2px_rgba(0,0,0,0.06)] hover-lift active:scale-[0.98]
-                   transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] min-h-[48px]"
+        className={cn(
+            'flex flex-col items-start gap-2 p-4 rounded-2xl bg-white border',
+            'shadow-[0_2px_8px_-2px_rgba(0,0,0,0.06)] hover-lift active:scale-[0.98]',
+            'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] h-[120px]',
+            highlight ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100',
+        )}
     >
         <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center', iconColor)}>
             <Icon icon={icon} width={18} />
         </div>
         <div className="text-left">
-            <span className="text-sm font-bold text-slate-800 whitespace-nowrap">{label}</span>
-            {count !== undefined && (
-                <span className="text-xs text-slate-400 ml-1">({count})</span>
-            )}
+            <p className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{title}</p>
+            <p className="text-base font-bold text-slate-800 leading-snug mt-0.5">{detail}</p>
+            {sub && <p className="text-sm text-slate-500 mt-0.5">{sub}</p>}
         </div>
-        <Icon icon="solar:alt-arrow-right-linear" width={14} className="text-slate-300 ml-1" />
     </button>
 );
 

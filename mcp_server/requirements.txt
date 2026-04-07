@@ -1,0 +1,9 @@
+# CareFlow MCP SSE Server dependencies
+# MCP SSE 서버 의존성
+
+mcp>=1.0.0
+starlette
+uvicorn[standard]
+google-auth
+google-auth-oauthlib
+google-api-python-client

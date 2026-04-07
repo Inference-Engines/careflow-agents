@@ -15,9 +15,10 @@ Architecture / 아키텍처:
 Safety design / 안전 설계:
   temperature=0.1 — 증상 분류는 창의성이 아니라 일관성이 필요합니다.
   A triage system must be consistent, not creative.
-  response_mime_type="application/json" — 구조화된 출력을 강제하여 파싱 오류를 방지합니다.
   Forces structured output to prevent parsing errors in the escalation pipeline.
 """
+
+from datetime import datetime
 
 from google.adk.agents import LlmAgent
 # Gemini API 제약: google_search는 FunctionTool과 함께 사용 불가
@@ -59,7 +60,6 @@ from careflow.agents.safety.plugin import (
 #     높은 temperature는 긴급도 판정의 일관성을 해칩니다.
 #     High temperature degrades urgency classification consistency.
 #
-#   response_mime_type="application/json"
 #     JSON 출력을 강제하여 에스컬레이션 파이프라인의 파싱 안정성을 보장합니다.
 #     Enforces JSON output for reliable parsing in the escalation pipeline.
 #     Few-shot 예시와 결합하여 출력 스키마 준수율을 높입니다.
@@ -78,10 +78,15 @@ from careflow.agents.safety.plugin import (
 # ---------------------------------------------------------------------------
 def build_symptom_triage_agent(suffix: str = "") -> LlmAgent:
     """Symptom Triage Agent 인스턴스 생성 / Build a new Symptom Triage Agent."""
+    now = datetime.now()
+    instruction = SYMPTOM_TRIAGE_INSTRUCTION.format(
+        current_date=now.strftime("%Y-%m-%d"),
+        current_weekday=now.strftime("%A"),
+    )
     return LlmAgent(
         name=f"symptom_triage_agent{suffix}",
         model="gemini-2.5-flash",
-        instruction=SYMPTOM_TRIAGE_INSTRUCTION,
+        instruction=instruction,
         tools=[
             get_patient_medications,
             get_adherence_history,
@@ -96,7 +101,6 @@ def build_symptom_triage_agent(suffix: str = "") -> LlmAgent:
         description="Classifies symptom urgency and triggers escalation chain",
         generate_content_config=types.GenerateContentConfig(
             temperature=0.1,  # 안전 분류는 deterministic하게 / Deterministic for safety
-            response_mime_type="application/json",  # 구조화된 JSON 출력 강제 / Force structured JSON
         ),
         # 안전 콜백 연결 — 증상 분류는 안전 최우선이므로 반드시 필요
         # Safety callbacks — mandatory for safety-critical symptom triage

@@ -4,6 +4,18 @@
 # Google ADK (Agent Development Kit)
 google-adk>=0.2.0
 
+# MCP (Model Context Protocol) — SSE server + ADK MCP client
+# MCP SSE 서버 및 ADK MCP 클라이언트 연결용
+mcp>=1.0.0
+starlette
+uvicorn[standard]
+
+# Google API client libs (for MCP server OAuth + API calls)
+# Google API 클라이언트 (MCP 서버 OAuth 및 API 호출용)
+google-auth
+google-auth-oauthlib
+google-api-python-client
+
 # AlloyDB / PostgreSQL connectivity (AlloyDB first, mock fallback)
 # AlloyDB / PostgreSQL 연결용 — 미설치 시 mock 데이터로 자동 fallback
 sqlalchemy>=2.0.0

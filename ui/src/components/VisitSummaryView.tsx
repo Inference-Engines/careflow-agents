@@ -3,9 +3,13 @@ import TopBar from './TopBar';
 import BentoCard from './BentoCard';
 import { Icon } from '@iconify/react';
 import { cn } from '@/src/lib/utils';
+import { t } from '../lib/i18n';
 import { motion } from 'motion/react';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
 import { fetchRecentVisits, fetchCaregiver } from '../lib/api';
+
+// TODO: move to env var for production
+const GOOGLE_MAPS_API_KEY = 'REDACTED_MAPS_KEY';
 
 interface VisitSummaryViewProps {
     agentChat: UseAgentChatReturn;
@@ -81,7 +85,7 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                             <div className="flex items-center gap-2.5 mb-7">
                                 <Icon icon="solar:bolt-bold" width={20} className="text-primary" />
                                 <h3 className="text-base font-bold text-slate-900 tracking-tight">
-                                    Visit Summary
+                                    {t('visit_summary')}
                                 </h3>
                             </div>
 
@@ -127,7 +131,7 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                                 {/* New */}
                                 <div className="relative bg-primary/5 p-5 rounded-2xl border-2 border-primary/15 overflow-hidden">
                                     <div className="absolute -right-3 -top-3 opacity-[0.07] pointer-events-none">
-                                        <Icon icon="solar:trending-up-bold" width={68} className="text-primary" />
+                                        <Icon icon="solar:graph-up-bold" width={68} className="text-primary" />
                                     </div>
                                     <span className="text-sm font-bold text-primary uppercase tracking-wider">
                                         New Prescribed Dose
@@ -169,7 +173,7 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                                     <Icon icon="solar:calendar-bold" width={18} className="text-primary" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-bold text-slate-500">Google Calendar</p>
+                                    <p className="text-sm font-bold text-slate-500">Google Calendar</p>
                                     <p className="text-sm font-semibold text-slate-900">HbA1c Lab Test · 9:00 AM</p>
                                 </div>
                             </div>
@@ -180,7 +184,7 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                             <div className="w-11 h-11 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-5">
                                 <Icon icon="solar:users-group-rounded-bold" width={22} />
                             </div>
-                            <h4 className="text-base font-bold mb-4 tracking-tight">Caregiver Notification</h4>
+                            <h4 className="text-base font-bold mb-4 tracking-tight">{t('caregiver_notification')}</h4>
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-2xl">
                                     <div className="relative shrink-0">
@@ -191,7 +195,7 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-slate-900 tracking-tight">{caregiver.name}</p>
-                                        <p className="text-xs text-slate-600 font-medium uppercase tracking-widest">{caregiver.relation}</p>
+                                        <p className="text-sm text-slate-600 font-medium uppercase tracking-widest">{caregiver.relation}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 px-1">
@@ -207,7 +211,7 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                         <BentoCard stagger="stagger-5" innerClassName="p-0 overflow-hidden">
                             <div className="h-40 relative bg-surface-container-low">
                                 <img
-                                    src="https://maps.googleapis.com/maps/api/staticmap?center=Apollo+Hospital+Sarita+Vihar+New+Delhi&zoom=15&size=600x400&maptype=roadmap&markers=color:red%7CApollo+Hospital+Sarita+Vihar+New+Delhi&key=REDACTED_MAPS_KEY&style=feature:all%7Csaturation:-30"
+                                    src={`https://maps.googleapis.com/maps/api/staticmap?center=Apollo+Hospital+Sarita+Vihar+New+Delhi&zoom=15&size=600x400&maptype=roadmap&markers=color:red%7CApollo+Hospital+Sarita+Vihar+New+Delhi&key=${GOOGLE_MAPS_API_KEY}&style=feature:all%7Csaturation:-30`}
                                     alt="Apollo Hospital location map"
                                     className="w-full h-full object-cover"
                                     style={{ filter: 'saturate(0.4) brightness(0.9)' }}
@@ -233,23 +237,18 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                 <section className="grid grid-cols-1 md:grid-cols-4 gap-5">
                     {/* Dietary Update */}
                     <div
-                        className="md:col-span-1 animate-reveal stagger-1 p-7 rounded-[1.75rem] flex flex-col justify-between"
-                        style={{ background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)' }}
+                        className="md:col-span-1 animate-reveal stagger-1 p-7 rounded-[1.75rem] flex flex-col justify-between dietary-gradient"
                     >
-                        <Icon icon="solar:fork-spoon-bold" width={32} className="text-tertiary" />
+                        <Icon icon="solar:chef-hat-bold" width={32} className="text-tertiary" />
                         <div className="mt-6">
-                            <h4 className="font-bold text-lg text-slate-900 tracking-tight">Dietary Update</h4>
+                            <h4 className="font-bold text-lg text-slate-900 tracking-tight">{t('dietary_update')}</h4>
                             <p className="text-sm text-slate-600 mt-1 opacity-80">Sodium limit: 2,300mg/day</p>
                         </div>
                     </div>
 
                     {/* Discuss CTA */}
                     <div
-                        className="md:col-span-3 animate-reveal stagger-2 p-8 rounded-[1.75rem] flex flex-col md:flex-row items-center justify-between gap-7"
-                        style={{
-                            background: 'linear-gradient(135deg, #EFF2FA 0%, #E8EBF5 100%)',
-                            border: '1px solid rgba(28, 110, 242, 0.06)',
-                        }}
+                        className="md:col-span-3 animate-reveal stagger-2 p-8 rounded-[1.75rem] flex flex-col md:flex-row items-center justify-between gap-7 discuss-cta-gradient"
                     >
                         <div className="flex-1">
                             <h4 className="text-xl font-bold mb-2 tracking-tight">Have questions about these changes?</h4>
@@ -278,13 +277,37 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                                 disabled={agentChat.status === 'streaming'}
                                 className="btn-primary disabled:opacity-50 disabled:transform-none disabled:shadow-none"
                             >
-                                <span>Ask CareFlow</span>
+                                <span>{t('ask_careflow')}</span>
                                 <div className="btn-icon-wrap">
                                     <Icon icon="solar:stars-bold" width={13} />
                                 </div>
                             </button>
                         </div>
                     </div>
+                </section>
+
+                {/* ── Powered By Footer ──────────────────────────────── */}
+                <div className="text-center py-2">
+                    <p className="text-sm text-slate-400 font-medium">
+                        Powered by CareFlow Multi-Agent System
+                    </p>
+                </div>
+
+                {/* ── Download PDF Button ──────────────────────────── */}
+                <section className="animate-reveal stagger-3">
+                    <button
+                        onClick={() => window.print()}
+                        className={cn(
+                            'w-full py-4 rounded-2xl bg-primary text-white font-semibold text-base',
+                            'flex items-center justify-center gap-3',
+                            'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                            'hover:bg-primary/90 hover:-translate-y-0.5 hover:shadow-[0_8px_32px_-8px_rgba(28,110,242,0.35)]',
+                            'active:scale-[0.98]',
+                        )}
+                    >
+                        <Icon icon="solar:document-add-bold" width={20} />
+                        {t('download_report')}
+                    </button>
                 </section>
             </div>
         </div>
@@ -318,7 +341,7 @@ const ExtractionItem: React.FC<ExtractionItemProps> = ({ icon, color, label, tit
             <Icon icon={icon} width={20} />
         </div>
         <div>
-            <p className="text-slate-600 text-xs font-bold uppercase tracking-widest mb-1">
+            <p className="text-slate-600 text-sm font-bold uppercase tracking-widest mb-1">
                 {label}
             </p>
             <p className="text-slate-900 font-semibold text-base leading-snug tracking-tight">

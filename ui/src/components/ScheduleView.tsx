@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import BentoCard from './BentoCard';
 import { cn } from '@/src/lib/utils';
+import { t } from '../lib/i18n';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
-import { fetchAppointments as fetchAppointmentsApi, fetchActiveMedications } from '../lib/api';
+import { fetchAppointments as fetchAppointmentsApi, fetchActiveMedications, markMedicationTaken } from '../lib/api';
 
 type AppointmentStatus = 'upcoming' | 'today' | 'completed';
 
@@ -64,11 +65,11 @@ const FALLBACK_APPOINTMENTS: Appointment[] = [
 ];
 
 const FALLBACK_MED_SCHEDULE = [
-    { name: 'Metformin', dose: '1000mg', time: '08:00 AM', meal: 'After Breakfast', icon: 'solar:pill-bold', color: 'bg-primary/10 text-primary' },
-    { name: 'Aspirin', dose: '75mg', time: '08:00 AM', meal: 'After Breakfast', icon: 'solar:pill-bold', color: 'bg-tertiary/10 text-tertiary' },
-    { name: 'Amlodipine', dose: '5mg', time: '01:00 PM', meal: 'Before Lunch', icon: 'solar:pill-bold', color: 'bg-secondary/10 text-secondary' },
-    { name: 'Lisinopril', dose: '10mg', time: '01:30 PM', meal: 'After Lunch', icon: 'solar:pill-bold', color: 'bg-primary/10 text-primary' },
-    { name: 'Atorvastatin', dose: '20mg', time: '09:00 PM', meal: 'Before Bed', icon: 'solar:moon-bold', color: 'bg-slate-100 text-slate-500' },
+    { id: 'med-fm', name: 'Metformin', dose: '1000mg', time: '08:00 AM', meal: 'After Breakfast', icon: 'solar:pill-bold', color: 'bg-primary/10 text-primary' },
+    { id: 'med-as', name: 'Aspirin', dose: '75mg', time: '08:00 AM', meal: 'After Breakfast', icon: 'solar:pill-bold', color: 'bg-tertiary/10 text-tertiary' },
+    { id: 'med-am', name: 'Amlodipine', dose: '5mg', time: '01:00 PM', meal: 'Before Lunch', icon: 'solar:pill-bold', color: 'bg-secondary/10 text-secondary' },
+    { id: 'med-li', name: 'Lisinopril', dose: '10mg', time: '01:30 PM', meal: 'After Lunch', icon: 'solar:pill-bold', color: 'bg-primary/10 text-primary' },
+    { id: 'med-at', name: 'Atorvastatin', dose: '20mg', time: '09:00 PM', meal: 'Before Bed', icon: 'solar:moon-bold', color: 'bg-slate-100 text-slate-500' },
 ];
 
 const statusConfig: Record<AppointmentStatus, { label: string; classes: string; dot: string; timelineColor: string }> = {
@@ -84,6 +85,11 @@ interface ScheduleViewProps {
 const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
     const [appointments, setAppointments] = useState<Appointment[]>(FALLBACK_APPOINTMENTS);
     const [medSchedule, setMedSchedule] = useState(FALLBACK_MED_SCHEDULE);
+    const [takenMeds, setTakenMeds] = useState<Set<string>>(new Set());
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [newApptTitle, setNewApptTitle] = useState('');
+    const [newApptDate, setNewApptDate] = useState('');
+    const [newApptTime, setNewApptTime] = useState('');
 
     useEffect(() => {
         let mounted = true;
@@ -112,6 +118,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
 
             if (meds?.length) {
                 setMedSchedule(meds.map((m) => ({
+                    id: m.id,
                     name: m.name,
                     dose: m.dose,
                     time: m.schedule || '',
@@ -119,6 +126,10 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                     icon: 'solar:pill-bold',
                     color: 'bg-primary/10 text-primary',
                 })));
+                // Seed taken state from API
+                const alreadyTaken = new Set<string>();
+                meds.forEach((m) => { if (m.taken_today) alreadyTaken.add(m.id); });
+                setTakenMeds(alreadyTaken);
             }
         }
 
@@ -135,7 +146,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
             {/* Header */}
             <div className="mb-8 animate-reveal">
                 <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
-                    Your Schedule
+                    {t('your_schedule')}
                 </h1>
                 <p className="text-slate-600 mt-1.5 font-medium text-base">
                     Upcoming appointments and daily medication plan.
@@ -148,21 +159,12 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                 <div className="lg:col-span-8 space-y-0">
                     <div className="flex items-center justify-between mb-4 animate-reveal stagger-1">
                         <h2 className="text-base font-bold text-slate-700 tracking-tight">
-                            Upcoming Appointments
+                            {t('upcoming_appointments')}
                         </h2>
                         <button
                             className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/8 text-primary font-semibold text-sm hover:bg-primary/15 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-300 cursor-pointer min-h-[48px]"
                             aria-label="Add new appointment"
-                            onClick={() => {
-                                const details = window.prompt(
-                                    'What appointment would you like to book?\n\n(e.g., Follow-up with Dr. Mehta on April 15 at 10:30 AM)',
-                                );
-                                if (details?.trim()) {
-                                    agentChat?.sendMessage(
-                                        `Please book an appointment and create a Google Calendar event: ${details.trim()}`,
-                                    );
-                                }
-                            }}
+                            onClick={() => setShowAddModal(true)}
                         >
                             <Icon icon="solar:add-circle-linear" width={16} />
                             Add Appointment
@@ -183,7 +185,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
 
                     {/* Past appointments */}
                     <div className="flex items-center gap-3 mt-10 mb-4 animate-reveal stagger-4">
-                        <h2 className="text-base font-bold text-slate-400 tracking-tight">Past Appointments</h2>
+                        <h2 className="text-base font-bold text-slate-400 tracking-tight">{t('past_appointments')}</h2>
                         <div className="flex-1 h-px bg-surface-container-high" />
                     </div>
 
@@ -205,35 +207,59 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                         <div className="flex items-center gap-2.5 mb-6">
                             <Icon icon="solar:medicine-bold" width={20} className="text-primary" />
                             <h3 className="text-base font-bold text-slate-900 tracking-tight">
-                                Daily Medication Plan
+                                {t('daily_medication_plan')}
                             </h3>
                         </div>
 
                         <div className="space-y-3">
-                            {medSchedule.map((med, i) => (
-                                <div
-                                    key={i}
-                                    className={cn(
-                                        'flex items-center gap-3 p-3.5 rounded-2xl',
-                                        'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                                        'hover:bg-surface-container-low hover:-translate-y-0.5 hover:shadow-sm',
-                                    )}
-                                >
-                                    <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', med.color)}>
-                                        <Icon icon={med.icon} width={18} />
+                            {medSchedule.map((med, i) => {
+                                const isTaken = med.id ? takenMeds.has(med.id) : false;
+                                return (
+                                    <div
+                                        key={med.id || i}
+                                        className={cn(
+                                            'flex items-center gap-3 p-3.5 rounded-2xl',
+                                            'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                                            'hover:bg-surface-container-low hover:-translate-y-0.5 hover:shadow-sm',
+                                            isTaken && 'opacity-60',
+                                        )}
+                                    >
+                                        <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', med.color)}>
+                                            <Icon icon={med.icon} width={18} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-sm text-slate-900 tracking-tight truncate">
+                                                {med.name}
+                                                <span className="text-slate-500 font-normal ml-1.5">{med.dose}</span>
+                                            </p>
+                                            <p className="text-sm text-slate-600 mt-0.5">{med.meal}</p>
+                                        </div>
+                                        <span className="text-sm font-semibold text-slate-500 shrink-0">
+                                            {med.time}
+                                        </span>
+                                        {med.id && (
+                                            <button
+                                                onClick={async () => {
+                                                    if (isTaken) return;
+                                                    const ok = await markMedicationTaken(med.id!);
+                                                    if (ok) setTakenMeds((prev) => new Set(prev).add(med.id!));
+                                                }}
+                                                disabled={isTaken}
+                                                className={cn(
+                                                    'shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-300',
+                                                    isTaken
+                                                        ? 'bg-secondary/15 text-secondary cursor-default'
+                                                        : 'bg-primary/8 text-primary hover:bg-primary/20 hover:scale-110 cursor-pointer',
+                                                )}
+                                                aria-label={isTaken ? `${med.name} taken` : `Mark ${med.name} as taken`}
+                                                title={isTaken ? t('taken') : t('mark_taken')}
+                                            >
+                                                <Icon icon={isTaken ? 'solar:check-circle-bold' : 'solar:check-circle-linear'} width={18} />
+                                            </button>
+                                        )}
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-sm text-slate-900 tracking-tight truncate">
-                                            {med.name}
-                                            <span className="text-slate-500 font-normal ml-1.5">{med.dose}</span>
-                                        </p>
-                                        <p className="text-sm text-slate-600 mt-0.5">{med.meal}</p>
-                                    </div>
-                                    <span className="text-xs font-semibold text-slate-500 shrink-0">
-                                        {med.time}
-                                    </span>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </BentoCard>
 
@@ -242,15 +268,15 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                         <div className="flex items-center gap-2.5 mb-5">
                             <Icon icon="solar:chart-square-bold" width={20} className="text-tertiary" />
                             <h3 className="text-base font-bold text-slate-900 tracking-tight">
-                                This Month
+                                {t('this_month')}
                             </h3>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             {[
-                                { label: 'Appointments', value: '4', icon: 'solar:calendar-bold', color: 'text-primary bg-primary/10' },
-                                { label: 'Completed', value: '1', icon: 'solar:check-circle-bold', color: 'text-secondary bg-secondary/10' },
-                                { label: 'Medications', value: '5', icon: 'solar:pill-bold', color: 'text-primary bg-primary/10' },
-                                { label: 'Adherence', value: '92%', icon: 'solar:shield-check-bold', color: 'text-secondary bg-secondary/10' },
+                                { label: 'Appointments', value: String(appointments.length), icon: 'solar:calendar-bold', color: 'text-primary bg-primary/10' },
+                                { label: 'Completed', value: String(past.length), icon: 'solar:check-circle-bold', color: 'text-secondary bg-secondary/10' },
+                                { label: 'Medications', value: String(medSchedule.length), icon: 'solar:pill-bold', color: 'text-primary bg-primary/10' },
+                                { label: 'Adherence (est.)', value: '92%', icon: 'solar:shield-check-bold', color: 'text-secondary bg-secondary/10' },
                             ].map(({ label, value, icon, color }) => (
                                 <div key={label} className="bg-surface-container-low rounded-2xl p-4 hover-lift">
                                     <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center mb-3', color)}>
@@ -264,6 +290,87 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                     </BentoCard>
                 </div>
             </div>
+
+            {/* ── Add Appointment Modal ─────────────────────────────── */}
+            {showAddModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowAddModal(false)}>
+                    <div
+                        className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md mx-4 animate-reveal"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <Icon icon="solar:calendar-bold" width={20} className="text-primary" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 tracking-tight">New Appointment</h3>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Appointment Title</label>
+                                <input
+                                    type="text"
+                                    value={newApptTitle}
+                                    onChange={(e) => setNewApptTitle(e.target.value)}
+                                    placeholder="e.g. Follow-up with Dr. Mehta"
+                                    className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] placeholder:text-slate-300 transition-all"
+                                    autoFocus
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Date</label>
+                                <input
+                                    type="date"
+                                    value={newApptDate}
+                                    onChange={(e) => setNewApptDate(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Time</label>
+                                <input
+                                    type="time"
+                                    value={newApptTime}
+                                    onChange={(e) => setNewApptTime(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] transition-all"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => {
+                                    setNewApptTitle('');
+                                    setNewApptDate('');
+                                    setNewApptTime('');
+                                    setShowAddModal(false);
+                                }}
+                                className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all"
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const parts = [newApptTitle.trim()];
+                                    if (newApptDate) parts.push(`on ${newApptDate}`);
+                                    if (newApptTime) parts.push(`at ${newApptTime}`);
+                                    if (parts[0]) {
+                                        agentChat?.sendMessage(
+                                            `Please book an appointment and create a Google Calendar event: ${parts.join(' ')}`,
+                                        );
+                                    }
+                                    setNewApptTitle('');
+                                    setNewApptDate('');
+                                    setNewApptTime('');
+                                    setShowAddModal(false);
+                                }}
+                                disabled={!newApptTitle.trim()}
+                                className="flex-1 py-3 rounded-2xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {t('book_appointment')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -305,7 +412,7 @@ const AppointmentCard: React.FC<{ appt: Appointment; index: number; dimmed?: boo
                         {/* Date badge */}
                         <div className="shrink-0 bg-primary/8 rounded-2xl p-3 text-center min-w-[52px]">
                             <Icon icon="solar:calendar-bold" width={20} className="text-primary mx-auto" />
-                            <p className="text-xs font-bold text-primary mt-1 uppercase tracking-wide">
+                            <p className="text-sm font-bold text-primary mt-1 uppercase tracking-wide">
                                 {appt.date.split(',')[0].slice(0, 3)}
                             </p>
                         </div>
@@ -317,7 +424,7 @@ const AppointmentCard: React.FC<{ appt: Appointment; index: number; dimmed?: boo
                                 </h3>
                                 <div className="flex items-center gap-1.5">
                                     <span className={cn('w-1.5 h-1.5 rounded-full', cfg.dot)} />
-                                    <span className={cn('text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full', cfg.classes)}>
+                                    <span className={cn('text-sm font-bold uppercase tracking-wide px-2 py-0.5 rounded-full', cfg.classes)}>
                                         {cfg.label}
                                     </span>
                                 </div>
@@ -347,18 +454,6 @@ const AppointmentCard: React.FC<{ appt: Appointment; index: number; dimmed?: boo
                             )}
                         </div>
 
-                        {!dimmed && (
-                            <div
-                                className={cn(
-                                    'shrink-0 p-2 rounded-xl text-slate-400',
-                                    'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                                    'group-hover:bg-primary/8 group-hover:text-primary',
-                                )}
-                                aria-hidden="true"
-                            >
-                                <Icon icon="solar:alt-arrow-right-linear" width={18} />
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

@@ -14,6 +14,7 @@
 import json
 import logging
 from copy import deepcopy
+from datetime import datetime
 from typing import Optional
 
 from google.adk.agents import LlmAgent
@@ -280,10 +281,15 @@ async def _after_model_postprocess(
 # ---------------------------------------------------------------------------
 def build_health_insight_agent(suffix: str = "") -> LlmAgent:
     """Health Insight Agent 인스턴스 생성 / Build a new Health Insight Agent."""
+    now = datetime.now()
+    instruction = HEALTH_INSIGHT_INSTRUCTION.format(
+        current_date=now.strftime("%Y-%m-%d"),
+        current_weekday=now.strftime("%A"),
+    )
     return LlmAgent(
         name=f"health_insight_agent{suffix}",
         model="gemini-2.5-flash",
-        instruction=HEALTH_INSIGHT_INSTRUCTION,
+        instruction=instruction,
         tools=[
             get_health_metrics,
             get_medication_history,
@@ -301,7 +307,6 @@ def build_health_insight_agent(suffix: str = "") -> LlmAgent:
         ),
         generate_content_config=types.GenerateContentConfig(
             temperature=0.2,  # 낮은 temperature → 일관성 있는 분석 / Low temp → consistent analytics
-            response_mime_type="application/json",
         ),
         before_model_callback=_before_model_guard,
         after_model_callback=_after_model_postprocess,

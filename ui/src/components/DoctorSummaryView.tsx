@@ -12,8 +12,9 @@ import {
 import { Icon } from '@iconify/react';
 import BentoCard from './BentoCard';
 import { cn } from '@/src/lib/utils';
+import { t } from '../lib/i18n';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
-import { fetchMetricTrend, fetchLatestMetric } from '../lib/api';
+import { fetchMetricTrend, fetchLatestMetric, fetchRecentVisits } from '../lib/api';
 
 const FALLBACK_CHART_DATA = [
     { name: 'Day 0', glucose: 140, dosage: 500 },
@@ -27,10 +28,10 @@ const FALLBACK_CHART_DATA = [
 ];
 
 const FALLBACK_VITALS = {
-    weight: { value: '88.4', unit: 'kg', trend: '+0.5kg', trendIcon: 'solar:trending-up-bold', trendColor: 'text-error' },
-    a1c: { value: '7.1', unit: '%', trend: '\u22120.3%', trendIcon: 'solar:trending-down-bold', trendColor: 'text-secondary' },
+    weight: { value: '88.4', unit: 'kg', trend: '+0.5kg', trendIcon: 'solar:graph-up-bold', trendColor: 'text-error' },
+    a1c: { value: '7.1', unit: '%', trend: '\u22120.3%', trendIcon: 'solar:graph-down-bold', trendColor: 'text-secondary' },
     hr: { value: '72', unit: 'bpm', trend: 'Stable', trendIcon: 'solar:minus-square-linear', trendColor: 'text-slate-500' },
-    sleep: { value: '6.5', unit: 'hrs', trend: 'Below Target', trendIcon: 'solar:trending-down-bold', trendColor: 'text-error' },
+    sleep: { value: '6.5', unit: 'hrs', trend: 'Below Target', trendIcon: 'solar:graph-down-bold', trendColor: 'text-error' },
 };
 
 interface DoctorSummaryViewProps {
@@ -41,21 +42,35 @@ interface DoctorSummaryViewProps {
 const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onViewChange }) => {
     const [chartData, setChartData] = useState(FALLBACK_CHART_DATA);
     const [vitals, setVitals] = useState(FALLBACK_VITALS);
+    const [lastVisitLabel, setLastVisitLabel] = useState('45 days ago');
     const [loading, setLoading] = useState(true);
+    const [showTopicModal, setShowTopicModal] = useState(false);
+    const [topicInput, setTopicInput] = useState('');
+    const [customTopics, setCustomTopics] = useState<{ title: string; desc: string }[]>([]);
 
     useEffect(() => {
         let mounted = true;
 
         async function loadData() {
-            const [trend, bp, glucose, weight, hr] = await Promise.all([
+            const [trend, bp, glucose, weight, hr, visits] = await Promise.all([
                 fetchMetricTrend('blood_glucose', 90),
                 fetchLatestMetric('blood_pressure'),
                 fetchLatestMetric('blood_glucose'),
                 fetchLatestMetric('weight'),
                 fetchLatestMetric('heart_rate'),
+                fetchRecentVisits(1),
             ]);
 
             if (!mounted) return;
+
+            if (visits.length > 0 && visits[0].date) {
+                const visitDate = new Date(visits[0].date);
+                const now = new Date();
+                const diffDays = Math.round((now.getTime() - visitDate.getTime()) / (1000 * 60 * 60 * 24));
+                if (diffDays === 0) setLastVisitLabel('today');
+                else if (diffDays === 1) setLastVisitLabel('1 day ago');
+                else setLastVisitLabel(`${diffDays} days ago`);
+            }
 
             if (trend?.length) {
                 setChartData(trend.map((pt, i) => ({
@@ -93,7 +108,7 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                     <Icon icon="solar:stethoscope-bold" width={20} className="text-white" />
                 </div>
                 <div>
-                    <p className="text-base font-bold text-primary tracking-tight">Doctor's Pre-Visit Summary</p>
+                    <p className="text-base font-bold text-primary tracking-tight">{t('doctor_summary')}</p>
                     <p className="text-sm text-slate-600 mt-0.5">Prepared for your healthcare provider ahead of the consultation.</p>
                 </div>
             </div>
@@ -108,9 +123,9 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                             <span className="text-slate-300 font-normal">(63)</span>
                         </h2>
                         <p className="text-slate-500 font-medium mt-2">
-                            Diagnosis: DM2 + HTN
+                            Diagnosis: Type 2 Diabetes + Hypertension
                             <span className="mx-2 text-outline-variant">|</span>
-                            Last Visit: 45 days ago
+                            Last Visit: {lastVisitLabel}
                         </p>
                     </div>
                     <div className="flex gap-3">
@@ -125,7 +140,7 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                             onClick={() => onViewChange?.('medication')}
                         >
                             <Icon icon="solar:history-linear" width={17} />
-                            Full History
+                            {t('full_history')}
                         </button>
                         <button
                             className="btn-primary min-h-[48px]"
@@ -136,7 +151,7 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                             }}
                         >
                             <Icon icon="solar:pen-2-bold" width={16} />
-                            <span>Start Consult</span>
+                            <span>{t('start_consult')}</span>
                             <div className="btn-icon-wrap">
                                 <Icon icon="solar:alt-arrow-right-bold" width={13} />
                             </div>
@@ -150,16 +165,13 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
 
                 {/* Adherence Report */}
                 <div
-                    className="md:col-span-4 animate-reveal stagger-1 relative overflow-hidden rounded-[1.75rem] p-8 flex flex-col justify-between"
-                    style={{
-                        background: 'linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%)',
-                    }}
+                    className="md:col-span-4 animate-reveal stagger-1 relative overflow-hidden rounded-[1.75rem] p-8 flex flex-col justify-between adherence-gradient"
                 >
                     {/* Floating decorative orb */}
                     <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-secondary/15 rounded-full animate-float pointer-events-none" />
 
                     <div className="relative z-10">
-                        <h3 className="text-secondary font-bold text-lg tracking-tight">Adherence Report</h3>
+                        <h3 className="text-secondary font-bold text-lg tracking-tight">{t('adherence_report')}</h3>
                         <p className="text-secondary/70 text-sm mt-0.5">Last 30 Days Compliance</p>
                     </div>
                     <div className="relative z-10 mt-8">
@@ -180,7 +192,7 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                             <div className="flex items-center gap-2 mb-2">
                                 <Icon icon="solar:stars-bold" className="text-primary" width={20} />
                                 <h3 className="text-primary font-bold text-base tracking-tight">
-                                    Health Insights
+                                    {t('health_insights')}
                                 </h3>
                             </div>
                             <p className="text-slate-500 text-sm max-w-md leading-relaxed">
@@ -221,11 +233,11 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                         <div className="flex items-center gap-5">
                             <div className="flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-primary" />
-                                <span className="text-xs font-semibold text-slate-600">Glucose (mg/dL)</span>
+                                <span className="text-sm font-semibold text-slate-600">Glucose (mg/dL)</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-secondary" />
-                                <span className="text-xs font-semibold text-slate-600">Dosage (mg)</span>
+                                <span className="text-sm font-semibold text-slate-600">Dosage (mg)</span>
                             </div>
                         </div>
                     </div>
@@ -244,7 +256,7 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                                         <stop offset="100%" stopColor="#059669" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" strokeOpacity={0.8} />
+                                <CartesianGrid strokeDasharray="3 3" className="recharts-grid-lines" stroke="var(--color-surface-container-high, #f1f5f9)" strokeOpacity={0.8} />
                                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 500 }} axisLine={false} tickLine={false} />
                                 <YAxis
                                     yAxisId="glucose"
@@ -265,15 +277,16 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                                 />
                                 <Tooltip
                                     contentStyle={{
-                                        background: '#ffffff',
-                                        border: '1px solid #e2e8f0',
+                                        background: 'var(--color-surface, #ffffff)',
+                                        border: '1px solid var(--color-outline-variant, #e2e8f0)',
                                         borderRadius: '16px',
                                         boxShadow: '0 12px 40px -8px rgba(0,0,0,0.15)',
                                         fontSize: 13,
                                         fontWeight: 600,
                                         padding: '12px 16px',
+                                        color: 'var(--color-text, inherit)',
                                     }}
-                                    labelStyle={{ color: '#64748b', fontWeight: 500, marginBottom: 4 }}
+                                    labelStyle={{ color: 'var(--color-outline, #64748b)', fontWeight: 500, marginBottom: 4 }}
                                     formatter={(value: number, name: string) => {
                                         if (name === 'glucose') return [`${value} mg/dL`, 'Glucose'];
                                         if (name === 'dosage') return [`${value} mg`, 'Metformin'];
@@ -318,7 +331,7 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                     <BentoCard className="h-full" stagger="stagger-4">
                         <div className="flex items-center gap-2.5 mb-6">
                             <Icon icon="solar:lightbulb-bold" width={20} className="text-tertiary" />
-                            <h3 className="text-base font-bold text-slate-900 tracking-tight">Consult Topics</h3>
+                            <h3 className="text-base font-bold text-slate-900 tracking-tight">{t('consult_topics')}</h3>
                         </div>
                         <ul className="space-y-3">
                             <ConsultTopic
@@ -336,6 +349,14 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                                 title="Lifestyle: Foot Care"
                                 desc="Patient noted mild tingling in peripheral check-in 2 days ago."
                             />
+                            {customTopics.map((topic, i) => (
+                                <ConsultTopic
+                                    key={`custom-${i}`}
+                                    number={4 + i}
+                                    title={topic.title}
+                                    desc={topic.desc}
+                                />
+                            ))}
                         </ul>
                         <button
                             className={cn(
@@ -345,14 +366,11 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                                 'hover:border-primary/30 hover:text-primary hover:bg-primary/5',
                             )}
                             onClick={() => {
-                                const topic = window.prompt('Enter a custom consult topic:');
-                                if (topic?.trim()) {
-                                    agentChat?.sendMessage(`Add consult topic for Rajesh Sharma: ${topic.trim()}`);
-                                }
+                                setShowTopicModal(true);
                             }}
                         >
                             <Icon icon="solar:add-circle-linear" width={17} />
-                            Add Custom Topic
+                            {t('add_topic')}
                         </button>
                     </BentoCard>
                 </div>
@@ -368,6 +386,65 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                     <VitalCard label="Sleep" value={vitals.sleep.value} unit={vitals.sleep.unit} trend={vitals.sleep.trend} trendIcon={vitals.sleep.trendIcon} trendColor={vitals.sleep.trendColor} stagger="stagger-4" loading={loading} />
                 </div>
             </section>
+            {/* ── Powered By Footer ─────────────────────────────────── */}
+            <div className="mt-10 text-center">
+                <p className="text-sm text-slate-400 font-medium">
+                    Powered by 8 CareFlow AI Agents
+                </p>
+            </div>
+
+            {/* ── Add Custom Topic Modal ─────────────────────────────── */}
+            {showTopicModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowTopicModal(false)}>
+                    <div
+                        className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md mx-4 animate-reveal"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <Icon icon="solar:lightbulb-bold" width={20} className="text-primary" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 tracking-tight">Add Consult Topic</h3>
+                        </div>
+                        <input
+                            type="text"
+                            value={topicInput}
+                            onChange={(e) => setTopicInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && topicInput.trim()) {
+                                    setCustomTopics(prev => [...prev, { title: topicInput.trim(), desc: 'Custom topic added by doctor.' }]);
+                                    setTopicInput('');
+                                    setShowTopicModal(false);
+                                }
+                            }}
+                            placeholder="e.g. Discuss sleep apnea screening"
+                            className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] placeholder:text-slate-300 transition-all"
+                            autoFocus
+                        />
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => { setTopicInput(''); setShowTopicModal(false); }}
+                                className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all"
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (topicInput.trim()) {
+                                        agentChat?.sendMessage(`Add consult topic: ${topicInput.trim()}`);
+                                        setTopicInput('');
+                                        setShowTopicModal(false);
+                                    }
+                                }}
+                                disabled={!topicInput.trim()}
+                                className="flex-1 py-3 rounded-2xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {t('add_topic')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

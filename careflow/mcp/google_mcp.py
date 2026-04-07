@@ -104,108 +104,75 @@ _GMAIL_SMTP_ENABLED = bool(_GMAIL_USER and _GMAIL_PASS)
 # ============================================================================
 
 async def _get_real_gmail_toolset():
-    """실제 Gmail MCP 서버에 SSE로 연결하여 McpToolset을 반환.
+    """실제 CareFlow MCP SSE 서버에 연결하여 Gmail 도구를 반환.
 
-    Connect to the real Gmail MCP server via SSE and return McpToolset tools.
+    Connect to CareFlow's MCP SSE server and return Gmail tools.
 
     Prerequisites / 사전 요구사항:
-        - GMAIL_MCP_SERVER_URL 환경변수 설정
-        - OAuth 인증 완료 (GOOGLE_OAUTH_* 환경변수)
+        - MCP SSE 서버 실행 중 (mcp_server/server.py)
+        - MCP_SERVER_URL 환경변수 (기본값: http://localhost:9000/sse)
         - google-adk[mcp] 패키지 설치
 
     Returns:
-        list of ADK Tool objects from the Gmail MCP server.
+        list of ADK Tool objects from the MCP server (Gmail tools).
 
     Raises:
         ImportError: google.adk.tools.mcp_tool 패키지 미설치 시
         ConnectionError: MCP 서버 연결 실패 시
     """
-    # ── 아래 코드는 MCP 서버가 준비되면 주석 해제 ──
-    # ── Uncomment below when MCP server is ready ──
-    #
-    # from google.adk.tools.mcp_tool import McpToolset
-    # from google.adk.tools.mcp_tool.mcp_session_manager import SseConnectionParams
-    #
-    # gmail_mcp_url = os.getenv(
-    #     "GMAIL_MCP_SERVER_URL",
-    #     "http://localhost:3000/sse",  # 로컬 MCP 서버 기본 URL
-    # )
-    #
-    # gmail_toolset = McpToolset(
-    #     connection_params=SseConnectionParams(
-    #         url=gmail_mcp_url,
-    #         headers={
-    #             "Authorization": f"Bearer {os.getenv('GOOGLE_OAUTH_ACCESS_TOKEN', '')}",
-    #         },
-    #     ),
-    #     # 필요한 도구만 선택적으로 필터 (선택사항)
-    #     # Optionally filter to only the tools you need
-    #     # tool_filter=["send_email", "create_draft", "search_emails"],
-    # )
-    #
-    # tools = await gmail_toolset.get_tools()
-    # logger.info("[MCP] Gmail MCP connected: %d tools loaded", len(tools))
-    # return tools
+    from google.adk.tools.mcp_tool import McpToolset
+    from google.adk.tools.mcp_tool.mcp_session_manager import SseConnectionParams
 
-    raise NotImplementedError(
-        "Real Gmail MCP is not yet configured. "
-        "Set CAREFLOW_USE_REAL_MCP=false or configure OAuth credentials. "
-        "See module docstring for setup instructions."
+    mcp_server_url = os.getenv(
+        "MCP_SERVER_URL",
+        "http://localhost:9000/sse",
     )
+
+    gmail_toolset = McpToolset(
+        connection_params=SseConnectionParams(url=mcp_server_url),
+        # Gmail 도구만 필터 / Filter to Gmail tools only
+        tool_filter=["gmail_send", "gmail_search"],
+    )
+
+    tools = await gmail_toolset.get_tools()
+    logger.info("[MCP] Gmail tools loaded from %s: %d tools", mcp_server_url, len(tools))
+    return tools
 
 
 async def _get_real_calendar_toolset():
-    """실제 Google Calendar MCP 서버에 SSE로 연결하여 McpToolset을 반환.
+    """실제 CareFlow MCP SSE 서버에 연결하여 Calendar 도구를 반환.
 
-    Connect to the real Google Calendar MCP server via SSE and return tools.
+    Connect to CareFlow's MCP SSE server and return Calendar tools.
 
     Prerequisites / 사전 요구사항:
-        - CALENDAR_MCP_SERVER_URL 환경변수 설정
-        - OAuth 인증 완료 (GOOGLE_OAUTH_* 환경변수)
+        - MCP SSE 서버 실행 중 (mcp_server/server.py)
+        - MCP_SERVER_URL 환경변수 (기본값: http://localhost:9000/sse)
         - google-adk[mcp] 패키지 설치
 
     Returns:
-        list of ADK Tool objects from the Calendar MCP server.
+        list of ADK Tool objects from the MCP server (Calendar tools).
 
     Raises:
         ImportError: google.adk.tools.mcp_tool 패키지 미설치 시
         ConnectionError: MCP 서버 연결 실패 시
     """
-    # ── 아래 코드는 MCP 서버가 준비되면 주석 해제 ──
-    # ── Uncomment below when MCP server is ready ──
-    #
-    # from google.adk.tools.mcp_tool import McpToolset
-    # from google.adk.tools.mcp_tool.mcp_session_manager import SseConnectionParams
-    #
-    # calendar_mcp_url = os.getenv(
-    #     "CALENDAR_MCP_SERVER_URL",
-    #     "http://localhost:3001/sse",  # 로컬 MCP 서버 기본 URL
-    # )
-    #
-    # calendar_toolset = McpToolset(
-    #     connection_params=SseConnectionParams(
-    #         url=calendar_mcp_url,
-    #         headers={
-    #             "Authorization": f"Bearer {os.getenv('GOOGLE_OAUTH_ACCESS_TOKEN', '')}",
-    #         },
-    #     ),
-    #     # 필요한 도구만 선택적으로 필터 (선택사항)
-    #     # Optionally filter to only the tools you need
-    #     # tool_filter=[
-    #     #     "list_events", "create_event", "update_event",
-    #     #     "delete_event", "get_event",
-    #     # ],
-    # )
-    #
-    # tools = await calendar_toolset.get_tools()
-    # logger.info("[MCP] Calendar MCP connected: %d tools loaded", len(tools))
-    # return tools
+    from google.adk.tools.mcp_tool import McpToolset
+    from google.adk.tools.mcp_tool.mcp_session_manager import SseConnectionParams
 
-    raise NotImplementedError(
-        "Real Calendar MCP is not yet configured. "
-        "Set CAREFLOW_USE_REAL_MCP=false or configure OAuth credentials. "
-        "See module docstring for setup instructions."
+    mcp_server_url = os.getenv(
+        "MCP_SERVER_URL",
+        "http://localhost:9000/sse",
     )
+
+    calendar_toolset = McpToolset(
+        connection_params=SseConnectionParams(url=mcp_server_url),
+        # Calendar 도구만 필터 / Filter to Calendar tools only
+        tool_filter=["calendar_create_event", "calendar_list_events"],
+    )
+
+    tools = await calendar_toolset.get_tools()
+    logger.info("[MCP] Calendar tools loaded from %s: %d tools", mcp_server_url, len(tools))
+    return tools
 
 
 # ============================================================================

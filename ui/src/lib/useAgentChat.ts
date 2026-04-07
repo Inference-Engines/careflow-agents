@@ -1,13 +1,22 @@
 /**
- * useAgentChat.ts — CareFlow Agent Chat Hook
+ * useAgentChat.ts — CareFlow 에이전트 채팅 훅 / Agent Chat Hook
  *
- * Manages a single ADK session per mount. Provides:
- *   - messages[]          : full chat history (user + assistant)
- *   - status              : 'idle' | 'streaming' | 'error'
- *   - sendMessage(text)   : sends to agent, streams response
+ * 컴포넌트 마운트 당 하나의 ADK 세션을 관리하는 React 커스텀 훅.
+ * 지연 세션 생성(lazy init), SSE 스트리밍, 에이전트 활동 추적을 캡슐화.
+ *
+ * Custom React hook that manages one ADK session per component mount.
+ * Encapsulates lazy session creation, SSE streaming, and real-time
+ * agent activity tracking (which sub-agent is active, what tool is called).
+ *
+ * @returns {UseAgentChatReturn}
+ *   - messages[]        : 전체 채팅 이력 (user + assistant)
+ *   - status            : 'idle' | 'streaming' | 'error'
+ *   - agentActivities[] : 실시간 에이전트 활동 (도구 호출, 서브에이전트 라우팅)
+ *   - sendMessage(text) : 에이전트에 메시지 전송 + 스트리밍 응답 수신
+ *   - clearMessages()   : 채팅 초기화 + 세션 리셋
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { createSession, streamAgentResponse } from './agentApi';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,16 +26,20 @@ import { createSession, streamAgentResponse } from './agentApi';
 export type ChatRole = 'user' | 'assistant';
 export type ChatStatus = 'idle' | 'streaming' | 'error';
 
+/** 채팅 메시지 / Chat message (user or assistant) */
 export interface ChatMessage {
   id: string;
   role: ChatRole;
+  /** 스트리밍 중에는 점진적으로 누적됨 / Accumulates incrementally during streaming */
   content: string;
   timestamp: Date;
 }
 
+/** 에이전트 활동 상태 — UI에서 실시간 파이프라인 표시용 / Agent activity for real-time pipeline display */
 export interface AgentActivity {
   agent: string;
   action: string;
+  /** active: 현재 실행 중, done: 완료, waiting: 대기 중 */
   status: 'active' | 'done' | 'waiting';
   icon: string;
   color: string;
@@ -50,9 +63,9 @@ function generateId(): string {
 
 const USER_ID = 'rajesh-sharma'; // Patient context matches agent's BOSS_INSTRUCTION
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Hook
-// ─────────────────────────────────────────────────────────────────────────────
+// ── 도구 라벨 매핑 / Tool Label Mapping ─────────────────────────────────────
+// 에이전트가 호출하는 도구명을 사용자 친화적 라벨로 변환.
+// Maps internal tool names to user-friendly labels for the activity feed.
 
 const TOOL_LABELS: Record<string, string> = {
   get_patient_medications: 'Checking medications',
@@ -75,11 +88,17 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 export function useAgentChat(): UseAgentChatReturn {
+  // ── 매 세션 새 대화 시작 / Fresh conversation per session ──────────────
+  // 새로고침 시 깨끗한 대화 시작. 세션 내에서는 메시지 유지.
+  // Start fresh on page load. Messages persist within the session only.
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus>('idle');
+  /** 실시간 에이전트 파이프라인 상태 / Real-time agent pipeline status */
   const [agentActivities, setAgentActivities] = useState<AgentActivity[]>([]);
 
-  // Session is created lazily on first sendMessage
+  // ── 지연 세션 생성 / Lazy Session Initialization ──────────────────────
+  // 첫 메시지 전송 시에만 ADK 세션을 생성하여 불필요한 API 호출 방지.
+  // ADK session is created only on first message to avoid unnecessary API calls.
   const sessionIdRef = useRef<string | null>(null);
   const sessionReadyRef = useRef<Promise<string> | null>(null);
 
@@ -126,10 +145,12 @@ export function useAgentChat(): UseAgentChatReturn {
 
       try {
         const sessionId = await ensureSession();
+        // ── 에이전트 활동 추적 / Agent Activity Tracking ────────────────
+        // seenAgents로 중복 방지. 새 에이전트 등장 시 이전 항목을 'done'으로 전환.
+        // seenAgents prevents duplicates. Previous entries marked 'done' on new agent.
         const seenAgents = new Set<string>();
 
         for await (const event of streamAgentResponse(USER_ID, sessionId, trimmed)) {
-          // Track agent activities
           if (event.type === 'agent_activity') {
             if (event.author && !seenAgents.has(event.author)) {
               seenAgents.add(event.author);

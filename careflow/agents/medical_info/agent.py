@@ -12,6 +12,7 @@
 import json
 import logging
 from copy import deepcopy
+from datetime import datetime
 from typing import Optional
 
 from google.adk.agents import LlmAgent
@@ -104,8 +105,8 @@ async def _before_model_guard(
         match = pattern.search(last_user_text)
         if match:
             logger.warning(
-                "[MedicalInfo] Blocked request containing '%s' from agent '%s'",
-                keyword,
+                "[MedicalInfo] Blocked request matching '%s' from agent '%s'",
+                match.group(),
                 callback_context.agent_name,
             )
             return LlmResponse(
@@ -251,10 +252,15 @@ def build_medical_info_agent(suffix: str = "") -> LlmAgent:
         suffix: name 충돌 방지용 접미사. 기본값 ""은 backward-compat용.
                 Suffix appended to the agent name to avoid collisions.
     """
+    now = datetime.now()
+    instruction = MEDICAL_INFO_INSTRUCTION.format(
+        current_date=now.strftime("%Y-%m-%d"),
+        current_weekday=now.strftime("%A"),
+    )
     return LlmAgent(
         name=f"medical_info_agent{suffix}",
         model="gemini-2.5-flash",
-        instruction=MEDICAL_INFO_INSTRUCTION,
+        instruction=instruction,
         tools=[
             store_visit_record,
             search_medical_history,
@@ -277,7 +283,6 @@ def build_medical_info_agent(suffix: str = "") -> LlmAgent:
         ),
         generate_content_config=types.GenerateContentConfig(
             temperature=0.2,  # 낮은 temperature → 일관성 있는 기록 검색 / Low temp → consistent retrieval
-            response_mime_type="application/json",
         ),
         before_model_callback=_before_model_guard,
         after_model_callback=_after_model_postprocess,

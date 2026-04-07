@@ -9,10 +9,12 @@
 # In production, these will be replaced by AlloyDB/pgvector/Toolbox integration.
 # ============================================================================
 
+from collections import OrderedDict
 from datetime import datetime
 from typing import Optional
 import json
 import logging
+import time
 
 from google.adk.tools import ToolContext
 from careflow.db.alloydb_client import query_dict, execute_write
@@ -91,8 +93,65 @@ def _generate_embedding(
 # Shared Gemini Flash client for HyDE expansion and Self-RAG reflection.
 # ---------------------------------------------------------------------------
 _gen_client = None
-_HYDE_CACHE: dict[str, str] = {}
-_REFLECT_CACHE: dict[str, str] = {}
+
+
+class _BoundedTTLCache(OrderedDict):
+    """Bounded dict cache with TTL eviction (stdlib only, no external deps).
+
+    최대 크기 초과 시 가장 오래된 항목부터 제거하고,
+    TTL이 만료된 항목은 조회 시 자동 삭제합니다.
+
+    Evicts oldest entries when maxsize is exceeded and transparently
+    removes entries whose TTL has expired on access.
+    """
+
+    def __init__(self, maxsize: int = 200, ttl: int = 3600):
+        super().__init__()
+        self._maxsize = maxsize
+        self._ttl = ttl
+        self._timestamps: dict[str, float] = {}
+
+    def _is_expired(self, key: str) -> bool:
+        ts = self._timestamps.get(key)
+        return ts is not None and (time.monotonic() - ts) > self._ttl
+
+    def __getitem__(self, key: str):
+        if self._is_expired(key):
+            self._evict(key)
+            raise KeyError(key)
+        self.move_to_end(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):  # noqa: D401
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __setitem__(self, key: str, value):
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        self._timestamps[key] = time.monotonic()
+        while len(self) > self._maxsize:
+            oldest = next(iter(self))
+            self._evict(oldest)
+
+    def __contains__(self, key):
+        if super().__contains__(key):
+            if self._is_expired(key):
+                self._evict(key)
+                return False
+            return True
+        return False
+
+    def _evict(self, key: str):
+        super().pop(key, None)
+        self._timestamps.pop(key, None)
+
+
+_HYDE_CACHE: _BoundedTTLCache = _BoundedTTLCache(maxsize=200, ttl=3600)
+_REFLECT_CACHE: _BoundedTTLCache = _BoundedTTLCache(maxsize=500, ttl=3600)
 
 
 def _get_gen_client():
@@ -358,7 +417,7 @@ _MOCK_CAREGIVER = {
         "caregiver_id": "CG-001",
         "name": "Priya Sharma",
         "relationship": "daughter",
-        "email": "agentstestsom@gmail.com",
+        "email": "1wosxai@gmail.com",
         "phone": "+91-9876543210",
         "city": "Bangalore",
     },

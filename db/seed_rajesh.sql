@@ -46,7 +46,7 @@ INSERT INTO caregivers (id, name, email, phone, relationship, location, notifica
 VALUES (
     '22222222-2222-2222-2222-222222222222',
     'Priya Sharma',
-    'agentstestsom@gmail.com',
+    '1wosxai@gmail.com',
     '+91-98765-43210',
     'daughter',
     'Bangalore, IN',

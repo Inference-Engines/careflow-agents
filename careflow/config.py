@@ -31,7 +31,7 @@ except ImportError:
 # Google Cloud / Google Cloud 설정
 # ---------------------------------------------------------------------------
 GOOGLE_CLOUD_PROJECT: str = os.getenv(
-    "GOOGLE_CLOUD_PROJECT", "reference-yen-492413-h8"
+    "GOOGLE_CLOUD_PROJECT", "agent-testing-adk-002"
 )
 GOOGLE_CLOUD_LOCATION: str = os.getenv(
     "GOOGLE_CLOUD_LOCATION", "us-central1"

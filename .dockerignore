@@ -1,0 +1,57 @@
+# ===========================================================================
+# .dockerignore -- CareFlow Cloud Run build
+# Keep the Docker context small and exclude secrets / dev artifacts.
+# ===========================================================================
+
+# -- Git ---------------------------------------------------------------------
+.git
+.gitignore
+
+# -- Node / UI dev artifacts -------------------------------------------------
+ui/node_modules
+ui/dist
+ui/.vite
+
+# -- Python caches -----------------------------------------------------------
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+careflow/**/__pycache__
+
+# -- Environment / secrets ---------------------------------------------------
+.env
+.env.*
+
+# -- IDE / editor ------------------------------------------------------------
+.vscode
+.idea
+*.swp
+*.swo
+
+# -- OS files ----------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -- Documentation (not needed in image) -------------------------------------
+docs/
+*.md
+LICENSE
+
+# -- Test files --------------------------------------------------------------
+test_*.py
+tests/
+
+# -- Local toolbox binaries (Windows / not needed in Linux container) --------
+toolbox.exe
+toolbox2.exe
+tools/toolbox.exe
+tools/alloydb-auth-proxy.exe
+
+# -- Docker itself -----------------------------------------------------------
+Dockerfile
+docker-compose*.yml
+.dockerignore

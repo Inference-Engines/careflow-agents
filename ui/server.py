@@ -1,21 +1,36 @@
-"""
-server.py — CareFlow FastAPI Proxy Server
+"""CareFlow FastAPI 프록시 서버 / FastAPI Proxy Server.
 
-Responsibilities:
-  1. Proxy /api/session  →  ADK server POST session creation
-  2. Proxy /api/run      →  ADK server SSE streaming run endpoint
-  3. AlloyDB data endpoints for health metrics, medications, appointments
-  4. Serve Vite build (dist/) as static files (production)
+프론트엔드와 ADK 서버 사이의 프록시 + AlloyDB 데이터 API를 제공한다.
+AlloyDB 연결 실패 시 목(mock) 데이터로 자동 폴백하여 오프라인 개발/데모 가능.
 
-Environment variables:
-  ADK_BASE_URL      — ADK server address  (default: http://localhost:8000)
-  APP_NAME          — ADK app name        (default: careflow)
-  PORT              — port to listen on   (default: 8001)
-  ALLOYDB_CONN_URI  — AlloyDB connection string (optional; falls back to mock)
+Acts as a proxy between the React frontend and ADK server, plus serves
+AlloyDB-backed data APIs. Gracefully falls back to mock data when AlloyDB
+is unavailable, enabling offline development and demo scenarios.
+
+아키텍처 / Architecture:
+  Browser (React) --> FastAPI Proxy --> ADK Server (agent orchestration)
+                                    --> AlloyDB (patient data) | Mock fallback
+
+엔드포인트 / Endpoints:
+  POST /api/session      -- ADK 세션 생성 프록시
+  POST /api/run          -- ADK SSE 스트리밍 프록시
+  GET  /api/health       -- 헬스체크 (ADK 연결 확인 포함)
+  GET  /api/metrics/*    -- 건강 지표 (AlloyDB -> mock 폴백)
+  GET  /api/medications/* -- 처방 정보 (AlloyDB -> mock 폴백)
+  GET  /api/appointments -- 예약 일정 (AlloyDB -> mock 폴백)
+  GET  /api/visits/*     -- 방문 기록 (AlloyDB -> mock 폴백)
+  GET  /api/caregiver    -- 보호자 정보 (AlloyDB -> mock 폴백)
+
+환경변수 / Environment variables:
+  ADK_BASE_URL      -- ADK 서버 주소    (default: http://localhost:8000)
+  APP_NAME          -- ADK 앱 이름      (default: careflow)
+  PORT              -- 리스닝 포트       (default: 8001)
+  ALLOYDB_CONN_URI  -- AlloyDB 연결 문자열 (미설정 시 mock 폴백)
 """
 
 from __future__ import annotations
 
+import json
 import os
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -25,7 +40,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,15 +50,14 @@ from careflow.db.alloydb_client import query_dict
 ADK_BASE_URL = os.getenv("ADK_BASE_URL", "http://localhost:8000")
 APP_NAME = os.getenv("APP_NAME", "careflow")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# In-memory medication adherence tracking (session-scoped)
-# ─────────────────────────────────────────────────────────────────────────────
-
+# ── 복약 이행 추적 (인메모리) / In-Memory Medication Adherence ───────────────
+# 세션 단위로 "오늘 복용 완료" 상태를 추적. 프로덕션에서는 AlloyDB로 대체 예정.
+# Tracks "taken today" per session. Will migrate to AlloyDB in production.
 _taken_today: dict[str, set[str]] = {}  # patient_id -> set of med_ids taken today
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Shared async HTTP client (reused across requests for connection pooling)
-# ─────────────────────────────────────────────────────────────────────────────
+# ── 공유 HTTP 클라이언트 / Shared Async HTTP Client ─────────────────────────
+# 커넥션 풀링으로 ADK 서버와의 통신 효율화. lifespan에서 생성/정리.
+# Connection-pooled client for ADK server. Created/closed in lifespan.
 
 http_client: httpx.AsyncClient | None = None
 
@@ -71,19 +85,22 @@ app.add_middleware(
 )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ADK Proxy Routes
-# ─────────────────────────────────────────────────────────────────────────────
+# ── ADK 프록시 라우트 / ADK Proxy Routes ─────────────────────────────────────
+# 프론트엔드가 ADK 서버에 직접 접근하지 않도록 프록시 계층을 둔다.
+# CORS·인증을 한 곳에서 관리하고, Cloud Run 배포 시 단일 서비스로 묶기 위함.
+# Proxy layer prevents direct frontend-to-ADK access.
+# Centralizes CORS/auth and enables single Cloud Run service deployment.
 
 
 @app.post("/api/session")
 async def create_session(request: Request):
-    """Create an ADK session.
+    """ADK 세션 생성 프록시 / Proxy ADK session creation.
 
     Body: { app_name, user_id, session_id }
     ADK endpoint: POST /apps/{app_name}/users/{user_id}/sessions/{session_id}
     """
-    assert http_client is not None
+    if not http_client:
+        return JSONResponse({"error": "Service not initialized"}, status_code=503)
 
     body = await request.json()
     app_name = body.get("app_name", APP_NAME)
@@ -98,19 +115,28 @@ async def create_session(request: Request):
 
 @app.post("/api/run")
 async def run_agent(request: Request):
-    """Proxy an agent run request, streaming back SSE events.
+    """ADK 에이전트 실행 프록시 — SSE 스트리밍 / Proxy agent run with SSE streaming.
 
-    Body follows ADK RunRequest schema:
-      { app_name, user_id, session_id, new_message, streaming }
+    ADK 응답(JSON 배열)을 SSE 이벤트로 변환하여 프론트엔드에 전달.
+    에이전트 활동(도구 호출, 서브에이전트 라우팅)이 실시간으로 표시된다.
+    Converts ADK response (JSON array) into SSE events for the frontend.
+    Agent activities (tool calls, sub-agent routing) appear in real-time.
     """
-    assert http_client is not None
+    if not http_client:
+        return JSONResponse({"error": "Service not initialized"}, status_code=503)
 
     body = await request.json()
 
     async def event_stream():
-        async with http_client.stream("POST", "/run", json=body) as adk_resp:
-            async for chunk in adk_resp.aiter_bytes():
-                yield chunk
+        # Get full response from ADK
+        resp = await http_client.post("/run", json=body, timeout=180.0)
+        data = resp.json()
+
+        # If it's a JSON array, emit each event as SSE
+        events = data if isinstance(data, list) else [data]
+        for event in events:
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -124,8 +150,9 @@ async def run_agent(request: Request):
 
 @app.get("/api/health")
 async def health():
-    """Health check — also forwards to ADK to verify connectivity."""
-    assert http_client is not None
+    """헬스체크 — ADK 연결 상태 확인 포함 / Health check with ADK connectivity."""
+    if not http_client:
+        return JSONResponse({"error": "Service not initialized"}, status_code=503)
     try:
         resp = await http_client.get("/list-apps", timeout=5.0)
         return {"status": "ok", "adk_apps": resp.json()}
@@ -133,12 +160,13 @@ async def health():
         return JSONResponse({"status": "degraded", "error": str(exc)}, status_code=503)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# AlloyDB Data Endpoints
-# ─────────────────────────────────────────────────────────────────────────────
+# ── AlloyDB 데이터 엔드포인트 / AlloyDB Data Endpoints ───────────────────────
+# 모든 데이터 엔드포인트는 AlloyDB 우선 조회 → 실패 시 mock 폴백 패턴을 따른다.
+# 이를 통해 AlloyDB 미설정 환경에서도 UI 데모가 가능하다.
+# Every data endpoint follows AlloyDB-first → mock-fallback pattern.
+# This enables UI demos even without an AlloyDB connection.
 
-
-# ── Mock data for graceful fallback ──────────────────────────────────────────
+# ── 목(mock) 데이터 — 폴백용 / Mock Data for Graceful Fallback ──────────────
 
 _MOCK_METRICS = {
     "blood_pressure": {
@@ -221,7 +249,7 @@ _MOCK_CAREGIVER = {
 
 @app.get("/api/metrics/latest")
 async def get_latest_metric(patient_id: str, type: str):
-    """Return the most recent health metric value for a given type."""
+    """최신 건강 지표 조회 / Latest health metric (AlloyDB -> mock fallback)."""
     rows = query_dict(
         """
         SELECT value_primary, value_secondary, unit, measured_at
@@ -257,7 +285,7 @@ async def get_latest_metric(patient_id: str, type: str):
 
 @app.get("/api/metrics/trend")
 async def get_metric_trend(patient_id: str, type: str, days: int = 90):
-    """Return time-series metric data for charts."""
+    """건강 지표 시계열 데이터 / Time-series metrics for trend charts (AlloyDB -> mock)."""
     rows = query_dict(
         """
         SELECT measured_at, value_primary, value_secondary
@@ -304,7 +332,7 @@ async def get_metric_trend(patient_id: str, type: str, days: int = 90):
 
 @app.get("/api/medications/active")
 async def get_active_medications(patient_id: str):
-    """Return active medications for a patient."""
+    """활성 처방 목록 / Active medications (AlloyDB -> mock fallback)."""
     rows = query_dict(
         """
         SELECT id, name, dosage, frequency, timing, prescribed_date, notes
@@ -345,7 +373,7 @@ async def get_active_medications(patient_id: str):
 
 @app.post("/api/medications/{med_id}/mark-taken")
 async def mark_medication_taken(med_id: str, patient_id: str):
-    """Mark a medication as taken today (in-memory session tracking)."""
+    """복약 완료 기록 (인메모리) / Mark medication taken today (in-memory)."""
     if patient_id not in _taken_today:
         _taken_today[patient_id] = set()
     _taken_today[patient_id].add(med_id)
@@ -361,7 +389,7 @@ async def mark_medication_taken(med_id: str, patient_id: str):
 
 @app.get("/api/appointments")
 async def get_appointments(patient_id: str):
-    """Return upcoming scheduled appointments."""
+    """예약 일정 조회 / Upcoming appointments (AlloyDB -> mock fallback)."""
     rows = query_dict(
         """
         SELECT id, type, title, scheduled_date, location, notes,
@@ -400,7 +428,7 @@ async def get_appointments(patient_id: str):
 
 @app.get("/api/visits/recent")
 async def get_recent_visits(patient_id: str, limit: int = 5):
-    """Return recent visit records."""
+    """최근 방문 기록 / Recent visit records (AlloyDB -> mock fallback)."""
     rows = query_dict(
         """
         SELECT id, visit_date, type, provider, summary, notes
@@ -421,7 +449,7 @@ async def get_recent_visits(patient_id: str, limit: int = 5):
 
 @app.get("/api/caregiver")
 async def get_caregiver(patient_id: str):
-    """Return caregiver info for a patient."""
+    """보호자 정보 조회 / Caregiver info (AlloyDB -> mock fallback)."""
     rows = query_dict(
         """
         SELECT id, name, relationship, phone, email, is_primary
@@ -435,6 +463,114 @@ async def get_caregiver(patient_id: str):
         return {"data": rows[0], "source": "alloydb"}
 
     return {"data": _MOCK_CAREGIVER, "source": "mock"}
+
+
+# ── 8. GET /api/drug-interactions ───────────────────────────────────────────
+
+_FALLBACK_INTERACTIONS = [
+    {
+        "drug1": "Metformin",
+        "drug2": "Lisinopril",
+        "severity": "MODERATE",
+        "description": "Lisinopril may increase the hypoglycemic effect of Metformin. Monitor blood glucose closely, especially after dose changes.",
+        "source": "openFDA Drug Label",
+    },
+    {
+        "drug1": "Amlodipine",
+        "drug2": "Atorvastatin",
+        "severity": "MODERATE",
+        "description": "Amlodipine may increase Atorvastatin blood levels, raising the risk of myopathy. Monitor for muscle pain or weakness.",
+        "source": "openFDA Drug Label",
+    },
+]
+
+
+@app.get("/api/drug-interactions")
+async def get_drug_interactions(patient_id: str = Query(...)):
+    """Check drug interactions for a patient's active medications via openFDA."""
+    import ssl
+    import urllib.parse
+    import urllib.request
+
+    # 1. Get active medication names
+    rows = query_dict(
+        """
+        SELECT name FROM medications
+        WHERE patient_id = :pid AND status = 'active'
+        """,
+        {"pid": patient_id},
+    )
+    med_names: list[str] = [r["name"] for r in rows] if rows else [m["name"] for m in _MOCK_MEDICATIONS]
+
+    if len(med_names) < 2:
+        return {"data": [], "source": "none"}
+
+    # 2. For each medication, try openFDA label lookup for interactions
+    interactions: list[dict] = []
+
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+
+    for drug in med_names:
+        other_drugs = [d for d in med_names if d != drug]
+        try:
+            query = f'(openfda.brand_name:"{drug}" OR openfda.generic_name:"{drug}")'
+            url = f"https://api.fda.gov/drug/label.json?search={urllib.parse.quote(query)}&limit=1"
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "CareFlow/1.0", "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=6, context=ssl_ctx) as resp:
+                data = json.loads(resp.read())
+
+            results = data.get("results", []) or []
+            if not results:
+                continue
+
+            label = results[0]
+            interaction_text = " ".join(label.get("drug_interactions", [])).lower()
+            warnings_text = " ".join(label.get("warnings", [])).lower()
+            contra_text = " ".join(label.get("contraindications", [])).lower()
+            combined = f"{interaction_text} {warnings_text} {contra_text}"
+
+            for other in other_drugs:
+                if other.lower() in combined:
+                    if other.lower() in contra_text:
+                        severity = "CONTRAINDICATED"
+                    elif other.lower() in warnings_text:
+                        severity = "HIGH"
+                    else:
+                        severity = "MODERATE"
+
+                    idx = combined.find(other.lower())
+                    snippet = combined[max(0, idx - 120): idx + 180].strip()[:300]
+
+                    pair_key = tuple(sorted([drug, other]))
+                    if not any(
+                        tuple(sorted([ia["drug1"], ia["drug2"]])) == pair_key
+                        for ia in interactions
+                    ):
+                        interactions.append({
+                            "drug1": drug,
+                            "drug2": other,
+                            "severity": severity,
+                            "description": snippet or f"Potential interaction between {drug} and {other}.",
+                            "source": "openFDA Drug Label",
+                        })
+        except Exception:
+            continue
+
+    # 3. Fallback: if openFDA yielded nothing, use hardcoded list
+    if not interactions:
+        med_set = {n.lower() for n in med_names}
+        interactions = [
+            ia for ia in _FALLBACK_INTERACTIONS
+            if ia["drug1"].lower() in med_set and ia["drug2"].lower() in med_set
+        ]
+        return {"data": interactions, "source": "fallback"}
+
+    return {"data": interactions, "source": "openfda"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

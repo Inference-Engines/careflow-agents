@@ -36,8 +36,6 @@ from careflow.agents.safety.plugin import (
 # temperature 0.4: 사실 기반 응답이 중요하지만 약간의 창의성 허용 (식단 제안)
 # temperature 0.4: factual accuracy is key, but allow some creativity for meal suggestions
 #
-# response_mime_type="application/json": 구조화된 JSON 출력 강제
-# response_mime_type="application/json": enforce structured JSON output
 #
 # output_key: 다운스트림 에이전트(예: caregiver_notification_agent)가
 #             세션 상태에서 이 키로 결과를 참조할 수 있음
@@ -77,7 +75,6 @@ def build_diet_nutrition_agent(suffix: str = "") -> LlmAgent:
         ),
         generate_content_config=types.GenerateContentConfig(
             temperature=0.4,
-            response_mime_type="application/json",
         ),
         # 안전 콜백 연결 — 입력/출력 양방향 보호
         # Safety callbacks — bidirectional input/output protection

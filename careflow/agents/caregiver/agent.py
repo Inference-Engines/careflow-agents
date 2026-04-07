@@ -13,6 +13,7 @@
 # ============================================================================
 
 import logging
+from datetime import datetime
 
 from google.adk.agents import LlmAgent
 # Gemini API 제약: google_search는 FunctionTool과 함께 사용 불가
@@ -64,10 +65,15 @@ def build_caregiver_agent(suffix: str = "") -> LlmAgent:
     Returns:
         A newly constructed LlmAgent ready to be wired into a workflow.
     """
+    now = datetime.now()
+    instruction = CAREGIVER_INSTRUCTION.format(
+        current_date=now.strftime("%Y-%m-%d"),
+        current_weekday=now.strftime("%A"),
+    )
     return LlmAgent(
         name=f"caregiver_agent{suffix}",
         model="gemini-2.5-flash",
-        instruction=CAREGIVER_INSTRUCTION,
+        instruction=instruction,
         tools=[
             generate_notification_message,
             send_whatsapp_notification,
@@ -88,7 +94,6 @@ def build_caregiver_agent(suffix: str = "") -> LlmAgent:
             # 메시지 생성에 약간의 다양성을 부여 -- 딱딱한 템플릿 느낌 완화
             # Slight creativity for message generation -- avoids rigid template feel
             temperature=0.3,
-            response_mime_type="application/json",
         ),
         before_model_callback=safety_before_model_callback,
         after_model_callback=safety_after_model_callback,

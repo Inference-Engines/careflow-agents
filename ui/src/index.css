@@ -52,6 +52,291 @@
     --color-outline-variant: #BFC4D9;
 }
 
+/* ─── Dark Mode ─────────────────────────────────────────────────────────── */
+/* Design: Slate-based dark palette with properly adjusted semantic colors.
+   All colors chosen for WCAG AA contrast (min 4.5:1) against dark surfaces. */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-background: #0B1120;
+        --color-surface: #151D2E;
+        --color-surface-container: #1E293B;
+        --color-text: #E8ECF4;
+    }
+}
+.dark {
+    /* ── Surfaces: 4-tier depth system ── */
+    --color-background:               #0B1120;   /* deepest — page bg */
+    --color-surface:                  #151D2E;   /* cards & panels */
+    --color-surface-container-low:    #1A2332;   /* subtle lift */
+    --color-surface-container:        #1E293B;   /* sidebar, nav */
+    --color-surface-container-high:   #273548;   /* elevated panels */
+    --color-surface-container-highest:#334155;   /* tooltips, dropdowns */
+
+    /* ── Semantic colors: boosted for dark bg contrast ── */
+    --color-primary:           #60A5FA;  /* Blue 400 — 8:1 on #151D2E */
+    --color-primary-container: #1E3A5F;
+    --color-primary-dim:       #3B82F6;
+    --color-on-primary:        #0B1120;
+
+    --color-secondary:           #34D399;  /* Emerald 400 — 8.5:1 */
+    --color-secondary-container: #064E3B;
+
+    --color-tertiary:           #FBBF24;  /* Amber 400 — 10:1 */
+    --color-tertiary-container: #422006;
+
+    --color-error:           #F87171;  /* Red 400 — 6.5:1 */
+    --color-error-container: #3B1111;
+
+    --color-critical:     #FB7185;    /* Rose 400 */
+    --color-warning:      #FBBF24;    /* Amber 400 */
+    --color-normal:       #34D399;    /* Emerald 400 */
+    --color-info:         #60A5FA;    /* Blue 400 */
+    --color-drug-alert:   #FB7185;
+    --color-drug-caution: #FBBF24;
+
+    /* ── Borders ── */
+    --color-outline:         #475569;
+    --color-outline-variant: #334155;
+
+    /* ── Text ── */
+    --color-text: #E8ECF4;
+}
+
+/* -- Dark: base surfaces ------------------------------------------------ */
+.dark body, .dark .bg-background { background: var(--color-background); color: var(--color-text); }
+.dark .bg-white, .dark .bg-surface { background: var(--color-surface) !important; }
+.dark .bg-surface-container-low { background: var(--color-surface-container-low); }
+.dark .bg-surface-container { background: var(--color-surface-container); }
+.dark .bg-surface-container-high { background: var(--color-surface-container-high); }
+.dark .bg-surface-container-highest { background: var(--color-surface-container-highest); }
+
+/* -- Dark: text — Slate scale mapped to dark-friendly values ------------ */
+.dark .text-slate-900 { color: #F1F5F9 !important; }
+.dark .text-slate-800 { color: #E2E8F0 !important; }
+.dark .text-slate-700 { color: #CBD5E1 !important; }
+.dark .text-slate-600 { color: #94A3B8 !important; }
+.dark .text-slate-500 { color: #94A3B8 !important; }  /* was #64748B (3.5:1 FAIL) → now 5.2:1 on surface */
+.dark .text-slate-400 { color: #94A3B8 !important; }
+.dark .text-slate-300 { color: #94A3B8 !important; }  /* was #64748B (3.5:1 FAIL) → now 5.2:1 on surface */
+
+/* -- Dark: semantic text colors ----------------------------------------- */
+.dark .text-primary { color: var(--color-primary) !important; }
+.dark .text-secondary { color: var(--color-secondary) !important; }
+.dark .text-tertiary { color: var(--color-tertiary) !important; }
+.dark .text-error { color: var(--color-error) !important; }
+.dark .text-critical { color: var(--color-critical) !important; }
+.dark .text-warning { color: var(--color-warning) !important; }
+.dark .text-normal { color: var(--color-normal) !important; }
+.dark .text-info { color: var(--color-info) !important; }
+
+/* -- Dark: borders ------------------------------------------------------ */
+.dark .border-slate-200 { border-color: #1E293B !important; }
+.dark .border-slate-100 { border-color: #151D2E !important; }
+.dark .border-outline-variant\/10 { border-color: rgba(51,65,85,0.4) !important; }
+.dark .border-outline-variant\/20 { border-color: rgba(51,65,85,0.5) !important; }
+.dark .border-black\/\[0\.06\] { border-color: rgba(255,255,255,0.06) !important; }
+
+/* -- Dark: card system -------------------------------------------------- */
+.dark .card-outer { background: rgba(21,29,46,0.8); border: 1px solid rgba(51,65,85,0.3); }
+.dark .card-inner { background: var(--color-surface); border-color: var(--color-outline-variant); }
+.dark .shadow-card { box-shadow: 0 4px 24px -4px rgba(0,0,0,0.5), 0 0 0 1px rgba(51,65,85,0.2); }
+
+/* -- Dark: tinted backgrounds ------------------------------------------- */
+.dark .bg-primary\/5, .dark .bg-primary\/8, .dark .bg-primary\/10 { background: rgba(96,165,250,0.1) !important; }
+.dark .bg-secondary\/5, .dark .bg-secondary\/10 { background: rgba(52,211,153,0.1) !important; }
+.dark .bg-tertiary\/10 { background: rgba(251,191,36,0.1) !important; }
+.dark .bg-amber-50 { background: rgba(251,191,36,0.08) !important; }
+.dark .bg-amber-50\/30 { background: rgba(251,191,36,0.06) !important; }
+.dark .bg-violet-50 { background: rgba(139,92,246,0.1) !important; }
+.dark .bg-red-50 { background: rgba(248,113,113,0.1) !important; }
+.dark .bg-slate-50 { background: var(--color-surface-container) !important; }
+.dark .bg-slate-100 { background: var(--color-surface-container) !important; }
+.dark .bg-slate-200 { background: var(--color-surface-container-high) !important; }
+
+/* -- Dark: form elements ------------------------------------------------ */
+.dark input, .dark textarea, .dark select {
+    background: var(--color-surface-container) !important;
+    color: var(--color-text) !important;
+    border-color: var(--color-outline-variant) !important;
+}
+.dark input::placeholder, .dark textarea::placeholder { color: #8891A5 !important; }  /* was #64748B (3.2:1 FAIL) → now 4.5:1 on container */
+
+/* -- Dark: prose (markdown chat responses) ------------------------------ */
+.dark .prose { color: #CBD5E1; }
+.dark .prose strong { color: #F1F5F9; }
+.dark .prose p { color: #CBD5E1; }
+.dark .prose h1, .dark .prose h2, .dark .prose h3, .dark .prose h4 { color: #F1F5F9; }
+.dark .prose a { color: var(--color-primary); }
+.dark .prose code { color: #E2E8F0; background: var(--color-surface-container); padding: 2px 6px; border-radius: 4px; }
+.dark .prose ul, .dark .prose ol { color: #CBD5E1; }
+
+/* -- Dark: glassmorphism ------------------------------------------------ */
+.dark .glass-panel { background: rgba(21,29,46,0.8); backdrop-filter: blur(12px); border-color: rgba(51,65,85,0.3); }
+.dark .glass-surface { background: rgba(21,29,46,0.6); border-color: rgba(51,65,85,0.2); }
+
+/* -- Dark: buttons ------------------------------------------------------ */
+.dark .btn-primary { background: var(--color-primary-dim); color: #FFF; }
+.dark .btn-primary:hover { background: var(--color-primary); }
+.dark .hover\:bg-slate-50:hover { background: var(--color-surface-container) !important; }
+
+/* -- Dark: semantic containers ------------------------------------------ */
+.dark .bg-error-container { background: rgba(248,113,113,0.12) !important; }
+.dark .bg-secondary-container { background: rgba(52,211,153,0.12) !important; }
+.dark .bg-tertiary-container { background: rgba(251,191,36,0.12) !important; }
+.dark .bg-tertiary-container\/50 { background: rgba(251,191,36,0.08) !important; }
+.dark .bg-warning\/10 { background: rgba(251,191,36,0.12) !important; }
+
+/* -- Dark: mobile bottom nav -------------------------------------------- */
+.dark .bg-white\/90 { background: rgba(11,17,32,0.92) !important; backdrop-filter: blur(12px); }
+
+/* -- TopBar header (extracted from inline style) ------------------------ */
+.topbar-header {
+    background: rgba(246, 248, 253, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+.dark .topbar-header {
+    background: rgba(11, 17, 32, 0.85) !important;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* -- Dark: loading & skeleton ------------------------------------------- */
+.dark .skeleton-shimmer { background: linear-gradient(90deg, #1E293B 25%, #334155 50%, #1E293B 75%); background-size: 200% 100%; }
+.dark .animate-pulse.bg-slate-200 { background: #334155 !important; }
+
+/* -- Dark: charts & data viz -------------------------------------------- */
+.dark .recharts-default-tooltip { background: var(--color-surface) !important; border-color: var(--color-outline-variant) !important; color: var(--color-text) !important; }
+.dark .recharts-cartesian-grid line { stroke: #1E293B !important; }
+.dark .recharts-xAxis .recharts-cartesian-axis-tick text,
+.dark .recharts-yAxis .recharts-cartesian-axis-tick text { fill: #94A3B8 !important; }
+
+/* -- Dark: gradient overlays -------------------------------------------- */
+.dark .bg-gradient-to-r.from-primary\/10 { background: linear-gradient(to right, rgba(96,165,250,0.1), transparent) !important; }
+
+/* -- Dark: modal & dialog backgrounds ----------------------------------- */
+.dark .bg-white.rounded-3xl,
+.dark .bg-white.rounded-2xl { background: var(--color-surface) !important; color: var(--color-text); }
+
+/* -- Dark: missing tinted backgrounds ----------------------------------- */
+.dark .bg-orange-50 { background: rgba(249,115,22,0.1) !important; }
+.dark .bg-red-600 { background: #DC2626 !important; }  /* keep visible on dark — emergency banner */
+.dark .bg-amber-100 { background: rgba(251,191,36,0.15) !important; }
+
+/* -- Dark: text colors missing overrides (non-slate) -------------------- */
+.dark .text-red-600 { color: #F87171 !important; }      /* Red 400 — visible on dark surfaces */
+.dark .text-amber-600 { color: #FBBF24 !important; }    /* Amber 400 — visible on dark surfaces */
+.dark .text-amber-700 { color: #FCD34D !important; }    /* Amber 300 — visible on dark surfaces */
+.dark .text-violet-500 { color: #A78BFA !important; }   /* Violet 400 — visible on dark surfaces */
+.dark .text-violet-600 { color: #A78BFA !important; }   /* Violet 400 — visible on dark surfaces */
+.dark .text-red-800 { color: #FCA5A5 !important; }      /* Red 300 — visible on dark surfaces */
+.dark .text-orange-800 { color: #FDBA74 !important; }   /* Orange 300 — visible on dark surfaces */
+.dark .text-amber-800 { color: #FCD34D !important; }    /* Amber 300 — visible on dark surfaces */
+
+/* -- Dark: border colors missing overrides ------------------------------ */
+.dark .border-amber-200 { border-color: rgba(251,191,36,0.25) !important; }
+
+/* -- Dark: AgentActivityFeed container ---------------------------------- */
+.dark .bg-white\/95 { background: rgba(21,29,46,0.95) !important; backdrop-filter: blur(12px); }
+
+/* -- Inline gradient replacements (light + dark) ------------------------ */
+.adherence-gradient { background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%); }
+.dark .adherence-gradient { background: linear-gradient(135deg, #064E3B 0%, #065F46 100%) !important; }
+
+.dietary-gradient { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); }
+.dark .dietary-gradient { background: linear-gradient(135deg, #422006 0%, #78350F 100%) !important; }
+
+.discuss-cta-gradient { background: linear-gradient(135deg, #EFF2FA 0%, #E8EBF5 100%); border: 1px solid rgba(28, 110, 242, 0.06); }
+.dark .discuss-cta-gradient { background: linear-gradient(135deg, #151D2E 0%, #1A2332 100%) !important; border-color: rgba(96,165,250,0.12) !important; }
+
+/* -- Dark: skeleton loading --------------------------------------------- */
+.dark .animate-pulse.bg-slate-200,
+.dark .bg-slate-300 { background: var(--color-surface-container-high) !important; }
+
+/* -- Dark: focus rings -------------------------------------------------- */
+.dark .focus\:ring-primary\/30:focus { --tw-ring-color: rgba(96,165,250,0.3); }
+
+/* -- Dark: divide colors ------------------------------------------------ */
+.dark .divide-slate-100 > :not(:first-child) { border-color: var(--color-surface-container) !important; }
+.dark .divide-slate-200 > :not(:first-child) { border-color: var(--color-surface-container-high) !important; }
+
+/* -- Dark: eyebrow pill ------------------------------------------------- */
+.dark .eyebrow { background: rgba(96,165,250,0.12); color: var(--color-primary); }
+
+/* ─── Colorblind-Safe Accessibility ─────────────────────────────────────── */
+/* Always pair color with icon/text — add visual cues beyond color alone */
+.status-elevated { text-decoration: underline; text-decoration-style: wavy; }
+.status-normal   { font-weight: 700; }
+
+/* ─── Color Vision Mode: Deuteranopia-Safe ──────────────────────────────── */
+/* Red→Orange (#EA580C), Green→Blue (#2563EB), Normal→Sky (#0EA5E9)
+   All pairs maintain min 3:1 contrast ratio between each other */
+.colorblind-deutan .text-error { color: #EA580C !important; }
+.colorblind-deutan .bg-error { background-color: #EA580C !important; }
+.colorblind-deutan .bg-error-container { background-color: rgba(234,88,12,0.1) !important; }
+.colorblind-deutan .text-red-500 { color: #EA580C !important; }
+.colorblind-deutan .text-red-600 { color: #C2410C !important; }
+.colorblind-deutan .bg-red-50 { background-color: rgba(234,88,12,0.08) !important; }
+.colorblind-deutan .text-secondary { color: #2563EB !important; }
+.colorblind-deutan .bg-secondary { background-color: #2563EB !important; }
+.colorblind-deutan .bg-secondary-container { background-color: rgba(37,99,235,0.1) !important; }
+.colorblind-deutan .bg-secondary\/5, .colorblind-deutan .bg-secondary\/10 { background-color: rgba(37,99,235,0.1) !important; }
+.colorblind-deutan .text-secondary.bg-secondary\/10 { color: #2563EB !important; }
+.colorblind-deutan .bg-critical { background-color: #EA580C !important; }
+.colorblind-deutan .text-critical { color: #EA580C !important; }
+.colorblind-deutan .bg-normal { background-color: #0EA5E9 !important; }
+.colorblind-deutan .text-normal { color: #0EA5E9 !important; }
+.colorblind-deutan .bg-drug-alert { background-color: #EA580C !important; }
+.colorblind-deutan .text-drug-alert { color: #EA580C !important; }
+.colorblind-deutan .bg-warning { background-color: #F59E0B !important; }
+.colorblind-deutan .text-warning { color: #D97706 !important; }
+
+/* ─── Color Vision Mode: Deuteranopia + Dark Combo ─────────────────────── */
+.colorblind-deutan.dark .text-error { color: #FB923C !important; }         /* Orange 400 — visible on dark */
+.colorblind-deutan.dark .bg-error-container { background: rgba(234,88,12,0.12) !important; }
+.colorblind-deutan.dark .text-secondary { color: #60A5FA !important; }     /* Blue 400 — replaces green */
+.colorblind-deutan.dark .bg-secondary-container { background: rgba(37,99,235,0.12) !important; }
+.colorblind-deutan.dark .text-normal { color: #38BDF8 !important; }        /* Sky 400 */
+.colorblind-deutan.dark .text-critical { color: #FB923C !important; }
+.colorblind-deutan.dark .text-drug-alert { color: #FB923C !important; }
+
+/* ─── Color Vision Mode: High Contrast ──────────────────────────────────── */
+/* Increases contrast for low-vision users */
+.high-contrast .text-slate-500,
+.high-contrast .text-slate-400,
+.high-contrast .text-slate-300 { color: #1e293b !important; }
+.high-contrast .text-slate-600 { color: #0f172a !important; }
+.high-contrast .border-slate-100,
+.high-contrast .border-slate-200 { border-color: #475569 !important; }
+.high-contrast .border-outline-variant\/10,
+.high-contrast .border-outline-variant\/20 { border-color: #475569 !important; }
+.high-contrast .bg-surface-container-low { background: #e2e8f0 !important; }
+.high-contrast .text-primary { color: #1d4ed8 !important; }
+.high-contrast .text-secondary { color: #047857 !important; }
+.high-contrast .text-error { color: #b91c1c !important; }
+.high-contrast .text-tertiary { color: #92400e !important; }
+.high-contrast .bg-white { background: #ffffff !important; }
+.high-contrast .shadow-card,
+.high-contrast .shadow-sm { box-shadow: 0 0 0 1px #94a3b8 !important; }
+
+/* High-contrast + dark combo */
+.high-contrast.dark .text-slate-500,
+.high-contrast.dark .text-slate-400,
+.high-contrast.dark .text-slate-300 { color: #f1f5f9 !important; }
+.high-contrast.dark .text-slate-600 { color: #e2e8f0 !important; }
+.high-contrast.dark .border-slate-100,
+.high-contrast.dark .border-slate-200 { border-color: #64748b !important; }
+.high-contrast.dark .bg-surface-container-low { background: #475569 !important; }
+.high-contrast.dark .text-primary { color: #93bbfd !important; }    /* boosted from #60a5fa for HC */
+.high-contrast.dark .text-secondary { color: #6ee7b7 !important; }  /* boosted from #34d399 for HC */
+.high-contrast.dark .text-error { color: #fca5a5 !important; }
+.high-contrast.dark .text-tertiary { color: #fde68a !important; }    /* boosted from #fcd34d for HC */
+.high-contrast.dark .border-outline-variant\/10,
+.high-contrast.dark .border-outline-variant\/20 { border-color: #64748b !important; }
+.high-contrast.dark .shadow-card,
+.high-contrast.dark .shadow-sm { box-shadow: 0 0 0 2px #64748b !important; }
+.high-contrast.dark .bg-white { background: var(--color-surface) !important; }
+
 /* ─── Base Styles ────────────────────────────────────────────────────────── */
 @layer base {
     html {
@@ -356,4 +641,64 @@
     body {
         overflow-x: hidden;
     }
+}
+
+/* ─── PDF / Print Styles ────────────────────────────────────────────────── */
+/* 사이드바, 네비게이션, 입력 UI를 숨기고 메인 콘텐츠만 깨끗하게 인쇄
+   Hide sidebar, nav, input UI — print only the main content cleanly */
+@media print {
+    @page { size: A4 portrait; margin: 1.5cm; }
+    body { background: white !important; color: #1a1a1a !important; font-size: 12pt; line-height: 1.6; }
+
+    /* 숨길 요소 — 사이드바, 네비게이션, 입력 UI / Elements to hide */
+    .no-print, nav, aside, textarea, .prompt-chip, .topbar-header,
+    [aria-label="Mobile navigation"], [aria-label="Voice input"],
+    button:not(.print-visible), .agent-activity-feed,
+    .skeleton-shimmer, .animate-pulse { display: none !important; }
+
+    /* 레이아웃 — 사이드바 마진 제거 / Remove sidebar margins */
+    .lg\:ml-72, .lg\:pl-72 { margin-left: 0 !important; padding-left: 0 !important; }
+    main, .main-content, [class*="ml-72"] { margin-left: 0 !important; width: 100% !important; }
+
+    /* 카드 — 페이지 나눔 방지 + 깔끔한 테두리 / Cards — no page break + clean borders */
+    .card-inner, .rounded-3xl, .rounded-2xl {
+        break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #e2e8f0 !important;
+        background: white !important;
+    }
+
+    /* 텍스트 색상 — 인쇄 가독성 / Text colors for print readability */
+    .text-primary { color: #1C6EF2 !important; }
+    .text-secondary { color: #059669 !important; }
+    .text-error, .text-critical { color: #DC2626 !important; }
+    .text-tertiary, .text-warning { color: #B45309 !important; }
+    .text-slate-500, .text-slate-400 { color: #64748b !important; }
+    .text-slate-900, .text-slate-800 { color: #1a1a1a !important; }
+
+    /* 헤더 — CareFlow 로고 + 날짜 / Header for PDF */
+    body::before {
+        content: "CareFlow Patient Report";
+        display: block;
+        font-size: 18pt;
+        font-weight: 800;
+        color: #1C6EF2;
+        margin-bottom: 12pt;
+        padding-bottom: 8pt;
+        border-bottom: 2px solid #1C6EF2;
+    }
+
+    /* 푸터 — 면책 조항 / Footer disclaimer */
+    body::after {
+        content: "This report is generated by CareFlow AI and does not constitute medical advice. Please discuss with your healthcare provider.";
+        display: block;
+        font-size: 8pt;
+        color: #94a3b8;
+        margin-top: 24pt;
+        padding-top: 8pt;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    /* 링크 — URL 표시 / Show link URLs */
+    a[href]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #64748b; }
 }

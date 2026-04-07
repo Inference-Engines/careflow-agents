@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Icon } from '@iconify/react';
 import { cn } from '@/src/lib/utils';
+import { t } from '../lib/i18n';
 
 interface EmergencyBannerProps {
     type: 'hypertensive_crisis' | 'hypoglycemia' | 'hyperglycemia';
@@ -57,11 +58,11 @@ const EmergencyBanner: React.FC<EmergencyBannerProps> = ({ type, message, value 
                         )}
                     >
                         <Icon icon="solar:phone-bold" width={18} />
-                        Call Emergency
+                        {t('call_emergency')}
                     </a>
                     <button
                         onClick={() => {
-                            if (window.confirm('This is a critical health alert. Are you sure you want to dismiss?')) {
+                            if (window.confirm('This is a critical health alert. I have read and understood this warning.')) {
                                 setDismissed(true);
                             }
                         }}

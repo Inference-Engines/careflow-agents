@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { cn } from '@/src/lib/utils';
+import { t } from '../lib/i18n';
 
 interface AgentActivity {
     agent: string;
@@ -27,37 +28,37 @@ interface ProcessingStep {
 const STEPS: ProcessingStep[] = [
     {
         id: 'routing',
-        label: 'Routing your question',
+        label: 'routing',
         triggers: ['root_agent', 'transfer_to_agent'],
         icon: 'solar:routing-bold-duotone',
     },
     {
         id: 'medications',
-        label: 'Checking your medications',
+        label: 'checking_meds',
         triggers: ['get_patient_medications', 'task_agent'],
         icon: 'solar:pill-bold-duotone',
     },
     {
         id: 'health',
-        label: 'Analyzing health data',
+        label: 'analyzing_health',
         triggers: ['get_health_metrics', 'get_recent_health_metrics', 'health_insight', 'calculate_trend'],
         icon: 'solar:heart-pulse-bold-duotone',
     },
     {
         id: 'records',
-        label: 'Consulting medical records',
+        label: 'consulting_records',
         triggers: ['search_medical_history', 'agentic_rag_search', 'medical_info'],
         icon: 'solar:document-medicine-bold-duotone',
     },
     {
         id: 'interactions',
-        label: 'Checking drug interactions',
+        label: 'checking_interactions',
         triggers: ['check_drug_interactions', 'check_food_drug_interaction'],
         icon: 'solar:shield-warning-bold-duotone',
     },
     {
         id: 'response',
-        label: 'Preparing response',
+        label: 'preparing_response',
         triggers: ['__generating'],
         icon: 'solar:chat-round-dots-bold-duotone',
     },
@@ -118,6 +119,27 @@ function deriveStepStatuses(events: AgentActivity[]): Record<string, StepStatus>
     return statuses;
 }
 
+/* ── Agent Display Names ──────────────────────────────────────────────────── */
+const AGENT_LABELS: Record<string, string> = {
+    root_agent: 'CareFlow Orchestrator',
+    task_agent: 'Task Manager',
+    health_insight: 'Health Insights Agent',
+    medical_info: 'Medical Info Agent',
+    agentic_rag_search: 'Medical Records Search',
+    check_drug_interactions: 'Drug Interaction Checker',
+    check_food_drug_interaction: 'Food-Drug Interaction Checker',
+    get_patient_medications: 'Medication Agent',
+    get_health_metrics: 'Health Metrics Agent',
+    get_recent_health_metrics: 'Health Metrics Agent',
+    search_medical_history: 'Medical History Agent',
+    calculate_trend: 'Trend Analysis Agent',
+    transfer_to_agent: 'Agent Router',
+};
+
+function getAgentDisplayName(raw: string): string {
+    return AGENT_LABELS[raw] || raw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /* ── Component ────────────────────────────────────────────────────────────── */
 const AgentActivityFeed: React.FC<AgentActivityFeedProps> = ({ events, visible }) => {
     const [elapsed, setElapsed] = useState(0);
@@ -164,8 +186,11 @@ const AgentActivityFeed: React.FC<AgentActivityFeedProps> = ({ events, visible }
         return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
     };
 
-    // Current live action text from the latest active event
-    const liveAction = events.filter((e) => e.status === 'active').slice(-1)[0]?.action;
+    // Current live action text from the latest active event (with friendly agent name)
+    const latestActive = events.filter((e) => e.status === 'active').slice(-1)[0];
+    const liveAction = latestActive
+        ? `${getAgentDisplayName(latestActive.agent)}: ${latestActive.action}`
+        : undefined;
 
     return (
         <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-lg shadow-primary/5 p-5 space-y-4 animate-reveal">
@@ -184,14 +209,21 @@ const AgentActivityFeed: React.FC<AgentActivityFeedProps> = ({ events, visible }
                     )}
                     <div>
                         <p className="text-sm font-bold text-slate-800 tracking-tight leading-none">
-                            {allDone ? 'Analysis complete' : 'CareFlow AI is analyzing...'}
+                            {allDone ? t('analysis_complete') : t('agent_analyzing')}
                         </p>
                         {currentStep && !allDone && (
-                            <p className="text-xs text-slate-500 mt-0.5">{currentStep.label}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{t(currentStep.label)}</p>
                         )}
                     </div>
                 </div>
-                <span className="text-xs font-mono text-slate-400 tabular-nums">{fmtTime(elapsed)}</span>
+                <div className="flex items-center gap-2">
+                    {events.length > 0 && (
+                        <span className="text-xs font-bold text-primary bg-primary/8 px-2 py-0.5 rounded-full">
+                            {new Set(events.map((e) => e.agent)).size} agents
+                        </span>
+                    )}
+                    <span className="text-xs font-mono text-slate-400 tabular-nums">{fmtTime(elapsed)}</span>
+                </div>
             </div>
 
             {/* ── Progress Bar ────────────────────────────────────────────── */}
@@ -252,12 +284,12 @@ const AgentActivityFeed: React.FC<AgentActivityFeedProps> = ({ events, visible }
                                     st === 'pending' && 'text-slate-400',
                                 )}
                             >
-                                {step.label}
+                                {t(step.label)}
                             </span>
 
                             {/* Done check */}
                             {st === 'done' && (
-                                <span className="ml-auto text-xs font-semibold text-secondary">Done</span>
+                                <span className="ml-auto text-xs font-semibold text-secondary">{t('done')}</span>
                             )}
                         </div>
                     );

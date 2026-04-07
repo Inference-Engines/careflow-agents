@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { cn } from '@/src/lib/utils';
+import { t } from '../lib/i18n';
 
 interface TopBarProps {
     title: string;
@@ -16,6 +17,15 @@ const NOTIFICATIONS = [
 const TopBar: React.FC<TopBarProps> = ({ title, icon }) => {
     const [bellOpen, setBellOpen] = useState(false);
     const bellRef = useRef<HTMLDivElement>(null);
+    const [darkMode, setDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+
+    useEffect(() => {
+        if (darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [darkMode]);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -32,12 +42,7 @@ const TopBar: React.FC<TopBarProps> = ({ title, icon }) => {
 
     return (
         <header
-            className="flex justify-between items-center w-full px-4 md:px-10 h-[68px] sticky top-0 z-40 border-b border-black/[0.04]"
-            style={{
-                background: 'rgba(246, 248, 253, 0.85)',
-                backdropFilter: 'blur(20px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            }}
+            className="topbar-header flex justify-between items-center w-full px-4 md:px-10 h-[68px] sticky top-0 z-40 border-b border-black/[0.04]"
         >
             {/* Title */}
             <div className="flex items-center gap-3 min-w-0">
@@ -53,6 +58,15 @@ const TopBar: React.FC<TopBarProps> = ({ title, icon }) => {
 
             {/* Actions */}
             <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                {/* Dark mode toggle */}
+                <button
+                    onClick={() => setDarkMode(prev => !prev)}
+                    className="relative p-2.5 text-slate-500 rounded-full hover:bg-surface-container-low transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:text-slate-800 hover:scale-105 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                    aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                    <Icon icon={darkMode ? 'solar:sun-bold' : 'solar:moon-bold'} width={20} />
+                </button>
+
                 {/* Notification bell with dropdown */}
                 <div className="relative" ref={bellRef}>
                     <button
@@ -74,7 +88,7 @@ const TopBar: React.FC<TopBarProps> = ({ title, icon }) => {
                     {bellOpen && (
                         <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] border border-slate-100 overflow-hidden z-50 animate-fade-in">
                             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                                <h4 className="text-sm font-bold text-slate-900">Notifications</h4>
+                                <h4 className="text-sm font-bold text-slate-900">{t('notifications')}</h4>
                                 {unreadCount > 0 && (
                                     <span className="text-xs font-semibold text-primary bg-primary/8 px-2 py-0.5 rounded-full">
                                         {unreadCount} new

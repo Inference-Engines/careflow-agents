@@ -88,7 +88,6 @@ check_agent = LlmAgent(
     ),
     generate_content_config=types.GenerateContentConfig(
         temperature=0.1,  # 순응도 확인은 deterministic / Deterministic for adherence checks
-        response_mime_type="application/json",
     ),
     before_model_callback=before_model_callback,
     after_model_callback=after_model_callback,
@@ -149,7 +148,6 @@ remind_agent = LlmAgent(
     ),
     generate_content_config=types.GenerateContentConfig(
         temperature=0.1,  # 리마인더 로직은 deterministic / Deterministic for reminder logic
-        response_mime_type="application/json",
     ),
     before_model_callback=before_model_callback,
     after_model_callback=after_model_callback,

@@ -295,7 +295,6 @@ def build_task_agent(suffix: str = "") -> LlmAgent:
         ),
         generate_content_config=types.GenerateContentConfig(
             temperature=0.2,  # 낮은 temperature → 일관성 있는 추출 / Low temp → consistent extraction
-            response_mime_type="application/json",
         ),
         before_model_callback=_before_model_guard,
         after_model_callback=_after_model_postprocess,

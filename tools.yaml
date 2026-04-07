@@ -38,16 +38,30 @@ tools:
   # ---------------------------------------------------------------------------
   # 1) search_patient_visits — pgvector 시맨틱 검색 / semantic vector search
   # ---------------------------------------------------------------------------
-  # visit_records 테이블의 embedding 컬럼(text-embedding-004, 768 dim)을 이용해
-  # 코사인 유사도 기반 시맨틱 검색을 수행한다.
-  # Performs cosine-similarity vector search over visit_records embeddings.
+  # CareFlow의 Agentic RAG 파이프라인 중 MCP Toolbox 경로.
+  # visit_records 테이블의 embedding 컬럼(text-embedding-005, 768 dim)과
+  # ILIKE 키워드 매칭을 함께 사용하는 하이브리드 검색.
+  #
+  # CareFlow implements a full 5-stage Agentic RAG pipeline:
+  #   1. HyDE — Gemini Flash generates hypothetical clinical note
+  #   2. Hybrid retrieval — pgvector cosine (dense) + ts_rank_cd (BM25)
+  #   3. RRF fusion — Reciprocal Rank Fusion (k=60)
+  #   4. Self-RAG reflection — LLM judges each candidate (YES/PARTIAL/NO)
+  #   5. Groundedness envelope — source tracing + evidence list
+  #
+  # This MCP Toolbox tool provides the keyword-matching leg of the hybrid
+  # search. The full pipeline (including embedding generation via Vertex AI
+  # text-embedding-005 and pgvector cosine similarity) runs Python-side in
+  # the Medical Info Agent's agentic_rag_search tool.
   search_patient_visits:
     kind: postgres-sql
     source: careflow_db
     description: >
       Search patient visit records using semantic similarity.
-      Returns the most relevant visits based on a natural-language query
-      and cosine distance over pgvector embeddings (text-embedding-004).
+      Part of CareFlow's 5-stage Agentic RAG pipeline (HyDE + Hybrid
+      Dense/BM25 + RRF Fusion + Self-RAG). This tool provides the
+      keyword-matching leg; the full pgvector cosine-similarity search
+      (text-embedding-005, 768-dim) runs via the Medical Info Agent.
     parameters:
       - name: query
         type: string
