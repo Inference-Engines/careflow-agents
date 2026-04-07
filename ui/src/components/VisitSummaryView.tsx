@@ -8,8 +8,7 @@ import { motion } from 'motion/react';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
 import { fetchRecentVisits, fetchCaregiver } from '../lib/api';
 
-// TODO: move to env var for production
-const GOOGLE_MAPS_API_KEY = 'REDACTED_MAPS_KEY';
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 interface VisitSummaryViewProps {
     agentChat: UseAgentChatReturn;
