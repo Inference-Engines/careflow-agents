@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import BentoCard from './BentoCard';
 import EmergencyBanner from './EmergencyBanner';
 import DrugInteractionAlert from './DrugInteractionAlert';
+import ChatTrendChart from './ChatTrendChart';
 import AgentActivityFeed from './AgentActivityFeed';
 import { cn } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -505,7 +506,16 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                                         {msg.role === 'assistant' ? (
                                             <div className="prose prose-sm prose-slate max-w-none">
                                                 {msg.content ? (
-                                                    <ReactMarkdown>{parseAgentResponse(msg.content)}</ReactMarkdown>
+                                                    <>
+                                                        <ReactMarkdown>{parseAgentResponse(msg.content)}</ReactMarkdown>
+                                                        {/* Auto-detect trend responses and show inline chart */}
+                                                        {/blood pressure|BP trend|systolic|diastolic/i.test(msg.content) && (
+                                                            <ChatTrendChart metricType="blood_pressure" />
+                                                        )}
+                                                        {/blood glucose|blood sugar|glucose trend|HbA1c/i.test(msg.content) && (
+                                                            <ChatTrendChart metricType="blood_glucose" />
+                                                        )}
+                                                    </>
                                                 ) : (
                                                     <div className="flex flex-col gap-1">
                                                         <div className="flex items-center gap-2">
