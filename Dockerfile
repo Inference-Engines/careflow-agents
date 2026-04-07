@@ -50,6 +50,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # -- Application source ------------------------------------------------------
 # Agent packages (all sub-agents, db, mcp, schemas, etc.)
 COPY careflow/ careflow/
+ENV PYTHONPATH=/app
 
 # MCP SSE Server (Gmail + Calendar via OAuth)
 COPY mcp_server/ mcp_server/
