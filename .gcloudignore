@@ -36,8 +36,6 @@ __pycache__/
 .env
 .env.local
 *.key
-client_secret*.json
-oauth_token.json
 application_default_credentials.json
 
 # ── Test outputs & large debug files ───────────────────────────────────────────

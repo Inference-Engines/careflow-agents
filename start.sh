@@ -12,7 +12,7 @@ echo "========================================="
 
 # ── 0. Start MCP SSE Server in background ────────────────────────────────────
 echo "[0/3] Starting MCP SSE Server on 127.0.0.1:9000 ..."
-python /app/mcp_server/server.py &
+PORT=9000 python /app/mcp_server/server.py &
 MCP_PID=$!
 sleep 2
 export MCP_SERVER_URL=http://localhost:9000/sse
