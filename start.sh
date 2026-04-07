@@ -39,10 +39,9 @@ done
 
 # ── 3. Start FastAPI proxy / static UI server ────────────────────────────────
 echo "[2/3] Starting FastAPI proxy + React UI on 0.0.0.0:${PORT:-8080} ..."
-cd /app/ui
-export PYTHONPATH=/app:$PYTHONPATH
-exec uvicorn server:app \
+cd /app
+export PYTHONPATH=/app:${PYTHONPATH}
+exec uvicorn ui.server:app \
     --host 0.0.0.0 \
     --port "${PORT:-8080}" \
-    --workers 2 \
     --log-level info

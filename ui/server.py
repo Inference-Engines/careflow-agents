@@ -28,10 +28,11 @@ is unavailable, enabling offline development and demo scenarios.
   ALLOYDB_CONN_URI  -- AlloyDB 연결 문자열 (미설정 시 mock 폴백)
 """
 
-from __future__ import annotations
+import os
+import sys
+sys.path.insert(0, '/app')
 
 import json
-import os
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 

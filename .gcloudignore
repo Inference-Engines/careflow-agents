@@ -60,7 +60,7 @@ DEPLOY.md
 README.md
 
 # ── Database seed files (not needed in container) ──────────────────────────────
-db/
+/db/
 
 # ── Local toolbox binary (downloaded separately, runs as its own Cloud Run service) ──
 tools/
