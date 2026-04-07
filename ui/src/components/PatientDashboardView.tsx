@@ -9,7 +9,7 @@ import { cn } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { t } from '../lib/i18n';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
-import { fetchLatestMetric, fetchActiveMedications, fetchAppointments, markMedicationTaken, fetchDrugInteractions } from '../lib/api';
+import { fetchLatestMetric, fetchMetricTrend, fetchActiveMedications, fetchAppointments, markMedicationTaken, fetchDrugInteractions } from '../lib/api';
 import type { MetricLatest, Medication, Appointment as ApiAppointment, DrugInteraction } from '../lib/api';
 
 interface PatientDashboardViewProps {
@@ -211,6 +211,9 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
     // Drug interaction alerts — fetched from the API (openFDA with fallback)
     const [drugInteractionAlerts, setDrugInteractionAlerts] = useState<DrugInteraction[]>([]);
 
+    // Proactive Alert — AI가 먼저 위험 감지 / AI proactively detects risks
+    const [proactiveAlert, setProactiveAlert] = useState<{type: string; message: string; severity: 'warning' | 'urgent'} | null>(null);
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
@@ -326,6 +329,54 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                 }
 
                 setEmergencyAlerts(alerts);
+
+                // Proactive Health Alert — 7-day trend analysis
+                let didSetAlert = false;
+                try {
+                    const recentBP = await fetchMetricTrend('blood_pressure', 7);
+                    if (recentBP?.length >= 3) {
+                        const values = recentBP.map((p: any) => parseFloat(p.systolic || p.value?.toString().split('/')[0] || '0'));
+                        const avg = values.reduce((a: number, b: number) => a + b, 0) / values.length;
+                        const latest = values[values.length - 1];
+                        const earliest = values[0];
+                        const trend = latest - earliest;
+
+                        if (avg > 140) {
+                            setProactiveAlert({
+                                type: 'bp_elevated',
+                                message: `Your blood pressure has averaged ${Math.round(avg)} mmHg over the past week, which is above the recommended 140 mmHg. Consider reducing sodium intake and discuss medication adjustment with Dr. Mehta at your next visit.`,
+                                severity: 'urgent'
+                            });
+                            didSetAlert = true;
+                        } else if (trend > 5) {
+                            setProactiveAlert({
+                                type: 'bp_rising',
+                                message: `Your blood pressure shows an upward trend over the past 7 days (${Math.round(earliest)} → ${Math.round(latest)} mmHg). This is worth monitoring. Try the DASH diet and ensure you're taking Amlodipine regularly.`,
+                                severity: 'warning'
+                            });
+                            didSetAlert = true;
+                        }
+                    }
+
+                    // Also check glucose if no BP alert
+                    if (!didSetAlert) {
+                        const recentGlucose = await fetchMetricTrend('blood_glucose', 7);
+                        if (recentGlucose?.length >= 3) {
+                            const gValues = recentGlucose.map((p: any) => parseFloat(p.value || '0'));
+                            const gAvg = gValues.reduce((a: number, b: number) => a + b, 0) / gValues.length;
+                            if (gAvg > 140) {
+                                setProactiveAlert({
+                                    type: 'glucose_elevated',
+                                    message: `Your blood glucose has averaged ${Math.round(gAvg)} mg/dL this week, above the 140 mg/dL target. Make sure to take Metformin with meals and limit sugary foods.`,
+                                    severity: 'warning'
+                                });
+                            }
+                        }
+                    }
+                } catch {
+                    // Trend fetch failed — skip proactive alert silently
+                }
+
                 setLoading(false);
             }
         }
@@ -374,6 +425,47 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                 </h1>
                 <TypingAnimation texts={TYPING_MESSAGES_KEYS.map(k => t(k))} />
             </div>
+
+            {/* -- Proactive Health Alert Banner ----------------------------- */}
+            {proactiveAlert && (
+                <div className={cn(
+                    'mb-5 p-4 rounded-2xl border-l-4 animate-reveal',
+                    proactiveAlert.severity === 'urgent'
+                        ? 'bg-error-container/50 border-error'
+                        : 'bg-amber-50 border-amber-400'
+                )}>
+                    <div className="flex items-start gap-3">
+                        <div className={cn(
+                            'w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
+                            proactiveAlert.severity === 'urgent' ? 'bg-error/10' : 'bg-amber-100'
+                        )}>
+                            <Icon
+                                icon={proactiveAlert.severity === 'urgent' ? 'solar:danger-triangle-bold' : 'solar:lightbulb-bolt-bold'}
+                                width={18}
+                                className={proactiveAlert.severity === 'urgent' ? 'text-error' : 'text-amber-600'}
+                            />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className={cn(
+                                    'text-xs font-bold px-2 py-0.5 rounded-full',
+                                    proactiveAlert.severity === 'urgent' ? 'bg-error/10 text-error' : 'bg-amber-100 text-amber-700'
+                                )}>
+                                    {proactiveAlert.severity === 'urgent' ? '\u26A0\uFE0F Proactive Alert' : '\uD83D\uDCA1 Health Insight'}
+                                </span>
+                                <span className="text-[10px] text-slate-400">AI-detected \u00B7 just now</span>
+                            </div>
+                            <p className="text-sm text-slate-700 leading-relaxed">{proactiveAlert.message}</p>
+                        </div>
+                        <button
+                            onClick={() => setProactiveAlert(null)}
+                            className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+                        >
+                            <Icon icon="solar:close-circle-linear" width={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* -- Row 2: Compact Vitals Chips (horizontal scroll) --------- */}
             <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar animate-reveal stagger-1">
