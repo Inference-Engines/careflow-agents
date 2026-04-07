@@ -429,34 +429,36 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
             {/* -- Proactive Health Alert Banner ----------------------------- */}
             {proactiveAlert && (
                 <div className={cn(
-                    'mb-5 p-4 rounded-2xl border-l-4 animate-reveal',
+                    'mb-5 rounded-2xl animate-reveal overflow-hidden shadow-card',
                     proactiveAlert.severity === 'urgent'
-                        ? 'bg-error-container/50 border-error'
-                        : 'bg-amber-50 border-amber-400'
+                        ? 'bg-gradient-to-r from-error/5 via-white to-white'
+                        : 'bg-gradient-to-r from-amber-50 via-white to-white'
                 )}>
-                    <div className="flex items-start gap-3">
-                        <div className={cn(
-                            'w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
-                            proactiveAlert.severity === 'urgent' ? 'bg-error/10' : 'bg-amber-100'
-                        )}>
-                            <Icon
-                                icon={proactiveAlert.severity === 'urgent' ? 'solar:danger-triangle-bold' : 'solar:lightbulb-bolt-bold'}
-                                width={18}
-                                className={proactiveAlert.severity === 'urgent' ? 'text-error' : 'text-amber-600'}
-                            />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className={cn(
-                                    'text-xs font-bold px-2 py-0.5 rounded-full',
-                                    proactiveAlert.severity === 'urgent' ? 'bg-error/10 text-error' : 'bg-amber-100 text-amber-700'
-                                )}>
-                                    {proactiveAlert.severity === 'urgent' ? '\u26A0\uFE0F Proactive Alert' : '\uD83D\uDCA1 Health Insight'}
-                                </span>
-                                <span className="text-[10px] text-slate-400">AI-detected \u00B7 just now</span>
+                    <div className="p-4">
+                        <div className="flex items-start gap-3">
+                            <div className={cn(
+                                'w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm',
+                                proactiveAlert.severity === 'urgent'
+                                    ? 'bg-error text-white'
+                                    : 'bg-gradient-to-br from-amber-400 to-amber-500 text-white'
+                            )}>
+                                <Icon
+                                    icon={proactiveAlert.severity === 'urgent' ? 'solar:danger-triangle-bold' : 'solar:lightbulb-bolt-bold'}
+                                    width={20}
+                                />
                             </div>
-                            <p className="text-sm text-slate-700 leading-relaxed">{proactiveAlert.message}</p>
-                        </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                    <span className={cn(
+                                        'text-xs font-bold tracking-tight',
+                                        proactiveAlert.severity === 'urgent' ? 'text-error' : 'text-amber-700'
+                                    )}>
+                                        {proactiveAlert.severity === 'urgent' ? 'Proactive Alert' : 'Health Insight'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-300">AI-detected</span>
+                                </div>
+                                <p className="text-sm text-slate-600 leading-relaxed">{proactiveAlert.message}</p>
+                            </div>
                         <button
                             onClick={() => setProactiveAlert(null)}
                             className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
