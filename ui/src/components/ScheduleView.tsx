@@ -6,7 +6,7 @@ import { t } from '../lib/i18n';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
 import { fetchAppointments as fetchAppointmentsApi, fetchActiveMedications, markMedicationTaken } from '../lib/api';
 
-type AppointmentStatus = 'upcoming' | 'today' | 'completed';
+type AppointmentStatus = 'upcoming' | 'today' | 'completed' | 'scheduled';
 
 interface Appointment {
     id: string;
@@ -18,6 +18,7 @@ interface Appointment {
     status: AppointmentStatus;
     type: string;
     note?: string;
+    fasting_required?: boolean;
 }
 
 const FALLBACK_APPOINTMENTS: Appointment[] = [
@@ -74,6 +75,7 @@ const FALLBACK_MED_SCHEDULE = [
 
 const statusConfig: Record<AppointmentStatus, { label: string; classes: string; dot: string; timelineColor: string }> = {
     upcoming: { label: 'Upcoming', classes: 'bg-primary/8 text-primary', dot: 'bg-primary', timelineColor: 'bg-primary' },
+    scheduled: { label: 'Upcoming', classes: 'bg-primary/8 text-primary', dot: 'bg-primary', timelineColor: 'bg-primary' },
     today: { label: 'Today', classes: 'bg-secondary/10 text-secondary', dot: 'bg-secondary', timelineColor: 'bg-secondary' },
     completed: { label: 'Completed', classes: 'bg-slate-100 text-slate-400', dot: 'bg-slate-300', timelineColor: 'bg-slate-300' },
 };
