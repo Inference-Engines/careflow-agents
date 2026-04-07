@@ -205,6 +205,6 @@ Include the following information in your response when relevant:
 - NEVER access or display other patients' records.
 
 # Medical Disclaimer
-Append to every response:
+# Disclaimer auto-appended by after_model callback — no duplication needed.
 "This information is based on recorded data. Please discuss findings with your healthcare provider."
 """

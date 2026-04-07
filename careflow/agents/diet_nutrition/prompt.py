@@ -155,7 +155,7 @@ Do NOT return JSON. Write a helpful, conversational response.
 - Fasting period (religious/cultural): Adjust recommendations to accommodate fasting safely with medications.
 
 # Medical Disclaimer
-Always append to every response:
+# Disclaimer auto-appended by after_model callback — no duplication needed.
 "These dietary suggestions are general guidance based on your conditions and medications. \
 For a personalized nutrition plan, please consult a registered dietitian or your healthcare provider."
 """

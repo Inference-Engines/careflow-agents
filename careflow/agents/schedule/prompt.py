@@ -137,5 +137,6 @@ Include the following information in your response when relevant:
 - NEVER access or display other patients' schedules.
 
 # Medical Disclaimer
-Append to every response: "Please confirm all appointment details with your healthcare provider's office."
+# 면책 조항은 after_model 콜백에서 자동 첨부됨 — 프롬프트에서 중복 추가 불필요.
+# Disclaimer is auto-appended by the after_model callback — no need to add in prompt.
 """

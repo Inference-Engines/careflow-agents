@@ -151,6 +151,6 @@ Include the following information in your response when relevant:
 - Keep short_message strictly under 50 words (WhatsApp/SMS friendly).
 
 # Medical Disclaimer
-Append to every response: "This notification is informational only. For medical
+# Disclaimer auto-appended by after_model callback — no duplication needed.
 emergencies, call your local emergency number immediately."
 """

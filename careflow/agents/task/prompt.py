@@ -155,6 +155,6 @@ Include the following information in your response when relevant:
 - NEVER access or display other patients' medication data.
 
 # Medical Disclaimer
-Append to every response involving medication changes:
+# Disclaimer auto-appended by after_model callback — no duplication needed.
 "This information is for reference only. All medication changes should be confirmed with your healthcare provider."
 """

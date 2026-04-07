@@ -84,13 +84,46 @@ def _is_fasting_test(title: str) -> bool:
 
 
 def _get_appointments_from_state(tool_context: ToolContext) -> list:
-    """state에서 예약 목록 로드 (없으면 mock 데이터 초기화).
+    """state에서 예약 목록 로드 — AlloyDB 우선, 없으면 mock fallback.
 
-    Load appointments from state (initialize with mock data if empty).
+    Load appointments: AlloyDB first, then state/mock fallback.
     """
     appointments = tool_context.state.get("appointments")
     if appointments is None:
-        # mock 데이터로 초기화 / Initialize with mock data
+        # ── AlloyDB 우선 조회 / Try AlloyDB first ──
+        try:
+            from careflow.db.alloydb_client import query_dict
+            patient_id = tool_context.state.get(
+                "current_patient_id", "11111111-1111-1111-1111-111111111111"
+            )
+            rows = query_dict(
+                """SELECT id, title, type, scheduled_date, location, notes, status,
+                          fasting_required
+                   FROM appointments
+                   WHERE patient_id = :pid
+                   ORDER BY scheduled_date""",
+                {"pid": patient_id},
+            )
+            if rows:
+                appointments = [
+                    {
+                        "id": str(r["id"]),
+                        "title": r.get("title", ""),
+                        "type": r.get("type", "appointment"),
+                        "date": str(r.get("scheduled_date", ""))[:10],
+                        "time": str(r.get("scheduled_date", ""))[11:16] or "09:00",
+                        "location": r.get("location", ""),
+                        "notes": r.get("notes", ""),
+                        "status": r.get("status", "scheduled"),
+                        "fasting_required": r.get("fasting_required", False),
+                    }
+                    for r in rows
+                ]
+                tool_context.state["appointments"] = appointments
+                return appointments
+        except Exception:
+            pass
+        # ── AlloyDB 실패 → mock fallback ──
         appointments = [apt.copy() for apt in _MOCK_EXISTING_APPOINTMENTS]
         tool_context.state["appointments"] = appointments
     return appointments
