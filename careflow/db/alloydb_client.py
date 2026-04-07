@@ -20,6 +20,17 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# ── .env 강제 로드 — ADK가 import 하기 전에 환경변수 확보 ──
+# Force-load .env so ALLOYDB_CONN_URI is available at import time.
+from pathlib import Path as _Path
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _env_path = _Path(__file__).resolve().parent.parent.parent / ".env"
+    if _env_path.exists():
+        _load_dotenv(_env_path)
+except ImportError:
+    pass
+
 # 모듈 수준 캐시 — 엔진은 한 번만 생성한다
 # Module-level cache — engine is created once and reused.
 _engine: Optional[Any] = None

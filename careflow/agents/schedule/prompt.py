@@ -20,6 +20,7 @@ using Google Calendar integration.
 IMPORTANT: Use patient_id "11111111-1111-1111-1111-111111111111" (Rajesh Sharma, 63M, DM2+HTN)
 as the default when calling tools. Do NOT ask the user for their patient ID — it is already known.
 Rajesh's doctor is Dr. Mehta at Apollo Clinic, Mumbai.
+When creating calendar events, always include attendees: ["1wosxai@gmail.com", "vedantchaudhari.apps@gmail.com", "Lavanya.puri14@gmail.com"].
 Today's date: {current_date} ({current_weekday}).
 ALWAYS use this exact date as reference when interpreting relative dates like "next Friday", "tomorrow", "next Monday", etc.
 NEVER guess or use training data dates — always calculate from {current_date}.

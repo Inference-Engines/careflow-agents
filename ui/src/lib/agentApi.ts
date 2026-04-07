@@ -88,58 +88,64 @@ export async function* streamAgentResponse(
     return;
   }
 
-  // ── SSE 증분 파싱 / Incremental SSE Parsing ──────────────────────────
-  // 프록시가 "data: {...}\n\n" 형식으로 전송. 버퍼에 누적 후 줄 단위로 파싱.
-  // Proxy emits "data: {...}\n\n" lines. Buffer accumulates, parse line-by-line.
+  // ── 듀얼 파싱: SSE + JSON array 모두 지원 / Dual parsing ──────────────
+  // ADK 응답이 SSE("data: {...}\n") 또는 JSON array("[{...}]")로 올 수 있음.
+  // 전체 수신 후 파싱하여 최종 모델 텍스트를 추출한다.
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
-  // 마지막 모델 텍스트만 최종 응답으로 사용 (서브에이전트 중간 출력 무시)
-  // Only the last model text becomes the final response (skip sub-agent output)
-  let lastModelText = '';
+  let fullBody = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    fullBody += decoder.decode(value, { stream: true });
+  }
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+  // 모든 이벤트를 flat array로 수집 / Collect all events
+  const events: any[] = [];
+  const trimmedBody = fullBody.trim();
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed === 'data: [DONE]') continue;
+  // Case 1: JSON array — "[{...}, {...}]"
+  if (trimmedBody.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmedBody);
+      if (Array.isArray(parsed)) events.push(...parsed);
+    } catch { /* fallback to line parsing */ }
+  }
 
-      const jsonStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
-      try {
-        const event = JSON.parse(jsonStr);
+  // Case 2: SSE lines — "data: {...}\ndata: {...}\n"
+  if (events.length === 0) {
+    for (const line of fullBody.split('\n')) {
+      const t = line.trim();
+      if (!t || t === 'data: [DONE]') continue;
+      const jsonStr = t.startsWith('data: ') ? t.slice(6) : t;
+      try { events.push(JSON.parse(jsonStr)); } catch { /* skip */ }
+    }
+  }
 
-        // ── 에이전트 활동 실시간 전달 / Yield agent activities in real-time ──
-        if (event.author) {
-          yield { type: 'agent_activity' as const, author: event.author };
+  // 이벤트 처리: 에이전트 활동 + 최종 모델 텍스트 추출
+  let lastModelText = '';
+
+  for (const event of events) {
+    if (event.author) {
+      yield { type: 'agent_activity' as const, author: event.author };
+    }
+    if (event.content?.parts) {
+      for (const part of event.content.parts) {
+        if (part.functionCall || part.function_call) {
+          const fc = part.functionCall || part.function_call;
+          yield { type: 'agent_activity' as const, author: event.author, toolCall: fc.name };
         }
-
-        if (event.content?.parts) {
-          for (const part of event.content.parts) {
-            if (part.functionCall || part.function_call) {
-              const fc = part.functionCall || part.function_call;
-              yield { type: 'agent_activity' as const, author: event.author, toolCall: fc.name };
-            }
-            if (part.text && event.content.role === 'model') {
-              lastModelText = part.text;
-            }
-          }
+        // 모델 텍스트 캡처 — role 체크 완화 (서브에이전트도 포함)
+        if (part.text && (!event.content.role || event.content.role === 'model')) {
+          lastModelText = part.text;
         }
-      } catch {
-        // skip malformed lines
       }
     }
   }
 
-  // Emit final text
   if (lastModelText) {
     yield { type: 'text_delta' as const, content: lastModelText };
   }
-
   yield { type: 'turn_complete' as const };
 }

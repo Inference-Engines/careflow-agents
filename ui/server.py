@@ -128,14 +128,39 @@ async def run_agent(request: Request):
     body = await request.json()
 
     async def event_stream():
-        # Get full response from ADK
-        resp = await http_client.post("/run", json=body, timeout=180.0)
-        data = resp.json()
+        import asyncio
+        # ── ADK 응답 수신 + keepalive로 브라우저 연결 유지 ──
+        # ADK 처리 중 매 5초마다 SSE 코멘트를 보내 브라우저가 끊지 않게 한다.
+        raw = b""
+        done = False
 
-        # If it's a JSON array, emit each event as SSE
-        events = data if isinstance(data, list) else [data]
-        for event in events:
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        async def fetch_adk():
+            nonlocal raw, done
+            try:
+                async with http_client.stream("POST", "/run", json=body, timeout=180.0) as adk_resp:
+                    async for chunk in adk_resp.aiter_bytes():
+                        raw += chunk
+            except Exception as e:
+                raw = json.dumps({"error": str(e)}).encode()
+            done = True
+
+        task = asyncio.create_task(fetch_adk())
+
+        # keepalive: 매 5초 SSE 코멘트 전송 (브라우저 타임아웃 방지)
+        while not done:
+            yield ": keepalive\n\n"
+            await asyncio.sleep(5)
+
+        await task
+
+        # Parse the accumulated response (ADK returns JSON array)
+        try:
+            data = json.loads(raw.decode("utf-8"))
+            events = data if isinstance(data, list) else [data]
+            for event in events:
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            yield f"data: {raw.decode('utf-8', errors='replace')}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(

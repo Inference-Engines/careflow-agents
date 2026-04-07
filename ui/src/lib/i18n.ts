@@ -24,9 +24,9 @@ const translations: Record<string, Record<string, string>> = {
 
     // Safety
     'safety_info': { en: 'Safety Info', ko: '안전 정보', hi: 'सुरक्षा जानकारी' },
-    'drug_alerts': { en: 'Drug Interaction Alerts', ko: '약물 충돌 주의', hi: 'दवाओं की टकराहट अलर्ट' },
-    'interactions': { en: 'interactions', ko: '건의 약물 충돌', hi: 'दवाओं की टकराहट' },
-    'tap_to_review': { en: 'Tap to review', ko: '탭하여 확인', hi: 'देखने के लिए टैप करें' },
+    'drug_alerts': { en: 'Drug Interaction Alerts', ko: '약물 상호작용 주의', hi: 'दवाओं की टकराहट अलर्ट' },
+    'interactions': { en: 'interactions', ko: '건의 약물 상호작용', hi: 'दवाओं की टकराहट' },
+    'tap_to_review': { en: 'Tap to review', ko: '눌러서 확인', hi: 'देखने के लिए टैप करें' },
 
     // Schedule
     'your_schedule': { en: 'Your Schedule', ko: '나의 일정', hi: 'आपकी समय-सारणी' },
@@ -36,7 +36,7 @@ const translations: Record<string, Record<string, string>> = {
     'this_month': { en: 'This Month', ko: '이번 달', hi: 'इस महीने' },
     'cancel': { en: 'Cancel', ko: '취소', hi: 'रद्द करें' },
     'book_appointment': { en: 'Book Appointment', ko: '예약하기', hi: 'अपॉइंटमेंट बुक करें' },
-    'next_visit': { en: 'Next Visit', ko: '다음 방문', hi: 'अगली मुलाक़ात' },
+    'next_visit': { en: 'Next Visit', ko: '다음 진료', hi: 'अगली मुलाक़ात' },
     'schedule': { en: 'Schedule', ko: '일정', hi: 'समय-सारणी' },
     'add_new': { en: '+ Add New', ko: '+ 새 예약', hi: '+ नया जोड़ें' },
     'fasting_required': { en: 'Fasting Required', ko: '검사 전 금식 필요', hi: 'खाली पेट आना ज़रूरी है' },
@@ -48,7 +48,7 @@ const translations: Record<string, Record<string, string>> = {
     'analyzing': { en: 'Let me look into that for you', ko: '확인하고 있어요', hi: 'मैं आपके लिए देख रहा हूँ...' },
     'send': { en: 'Send', ko: '전송', hi: 'भेजें' },
     'responding': { en: 'Responding...', ko: '응답 중...', hi: 'जवाब दे रहे हैं...' },
-    'careflow_thinking': { en: 'CareFlow is thinking...', ko: 'CareFlow가 생각 중...', hi: 'CareFlow सोच रहा है...' },
+    'careflow_thinking': { en: 'CareFlow is thinking...', ko: 'CareFlow가 분석 중...', hi: 'CareFlow सोच रहा है...' },
 
     // Prompts
     'prompt_1': { en: 'How am I doing today?', ko: '오늘 건강 상태는 어때요?', hi: 'आज मेरी सेहत कैसी है?' },
@@ -59,14 +59,14 @@ const translations: Record<string, Record<string, string>> = {
     // Doctor View
     'doctor_summary': { en: "Doctor's Pre-Visit Summary", ko: '진료 전 요약', hi: "डॉक्टर का प्री-विज़िट सारांश" },
     'adherence_report': { en: 'Adherence Report', ko: '약 복용 현황', hi: 'दवा पालन रिपोर्ट' },
-    'health_insights': { en: 'Health Insights', ko: '건강 인사이트', hi: 'स्वास्थ्य जानकारी' },
+    'health_insights': { en: 'Health Insights', ko: '건강 분석', hi: 'स्वास्थ्य जानकारी' },
     'consult_topics': { en: 'Consult Topics', ko: '상담 주제', hi: 'परामर्श विषय' },
     'start_consult': { en: 'Start Consult', ko: '상담 시작', hi: 'परामर्श शुरू करें' },
     'full_history': { en: 'Full History', ko: '전체 기록', hi: 'पूरा इतिहास' },
     'add_topic': { en: 'Add Custom Topic', ko: '상담 주제 추가', hi: 'अपना विषय जोड़ें' },
 
     // Visit Summary
-    'visit_summary': { en: 'Visit Summary', ko: '방문 요약', hi: 'मुलाक़ात सारांश' },
+    'visit_summary': { en: 'Visit Summary', ko: '진료 요약', hi: 'मुलाक़ात सारांश' },
     'medication_change': { en: 'Medication Change', ko: '약 변경 사항', hi: 'दवाई में बदलाव' },
     'caregiver_notification': { en: 'Caregiver Notification', ko: '보호자 알림', hi: 'परिवारजन को सूचना' },
     'download_report': { en: 'Download Report (PDF)', ko: '보고서 다운로드 (PDF)', hi: 'रिपोर्ट डाउनलोड करें (PDF)' },
@@ -75,7 +75,7 @@ const translations: Record<string, Record<string, string>> = {
     // Navigation
     'home': { en: 'Home', ko: '홈', hi: 'होम' },
     'doctor_view': { en: 'Doctor View', ko: '의사 화면', hi: 'डॉक्टर पेज' },
-    'my_visits': { en: 'My Visits', ko: '방문 기록', hi: 'मेरी मुलाक़ातें' },
+    'my_visits': { en: 'My Visits', ko: '진료 기록', hi: 'मेरी मुलाक़ातें' },
 
     // Settings
     'settings': { en: 'Settings', ko: '설정', hi: 'सेटिंग्स' },
@@ -93,13 +93,13 @@ const translations: Record<string, Record<string, string>> = {
     'checking_meds': { en: 'Checking your medications', ko: '약물을 확인하는 중', hi: 'आपकी दवाइयाँ जाँच रहे हैं' },
     'analyzing_health': { en: 'Analyzing health data', ko: '건강 데이터를 분석하는 중', hi: 'स्वास्थ्य जानकारी जाँच रहे हैं' },
     'consulting_records': { en: 'Consulting medical records', ko: '의료 기록을 조회하는 중', hi: 'मेडिकल रिकॉर्ड देख रहे हैं' },
-    'checking_interactions': { en: 'Checking drug interactions', ko: '약물 충돌 여부를 확인하는 중', hi: 'दवाओं की टकराहट जाँच रहे हैं' },
+    'checking_interactions': { en: 'Checking drug interactions', ko: '약물 상호작용 여부를 확인하는 중', hi: 'दवाओं की टकराहट जाँच रहे हैं' },
     'preparing_response': { en: 'Preparing response', ko: '응답을 준비하는 중', hi: 'जवाब तैयार कर रहे हैं' },
 
     // Health Tips (patient-facing)
     'tip_walking': { en: 'Did you know? Walking 30 min daily lowers BP by 5-8 mmHg.', ko: '알고 계셨나요? 매일 30분 걸으시면 혈압이 5~8 mmHg 낮아져요.', hi: 'क्या आप जानते हैं? रोज़ 30 मिनट टहलने से ब्लड प्रेशर 5-8 mmHg कम होता है।' },
-    'tip_metformin': { en: 'Tip: Take Metformin with meals to reduce stomach upset.', ko: '안내: Metformin은 식사와 함께 드시면 속이 편해요.', hi: 'सुझाव: पेट की तकलीफ़ कम करने के लिए मेटफ़ॉर्मिन खाने के साथ लें।' },
-    'tip_dash': { en: 'Fact: A DASH diet can lower BP as much as medication.', ko: '참고: DASH 식단은 약만큼 혈압을 낮출 수 있어요.', hi: 'तथ्य: DASH डाइट दवाई जितना ब्लड प्रेशर कम कर सकती है।' },
+    'tip_metformin': { en: 'Tip: Take Metformin with meals to reduce stomach upset.', ko: '안내: 메트포르민(Metformin)은 식사와 함께 드시면 속이 편해요.', hi: 'सुझाव: पेट की तकलीफ़ कम करने के लिए मेटफ़ॉर्मिन खाने के साथ लें।' },
+    'tip_dash': { en: 'Fact: A DASH diet can lower BP as much as medication.', ko: '참고: DASH(저염) 식단은 약만큼 혈압을 낮출 수 있어요.', hi: 'तथ्य: DASH डाइट दवाई जितना ब्लड प्रेशर कम कर सकती है।' },
     'tip_sleep': { en: 'Sleep tip: 7-8 hours of sleep helps regulate blood sugar.', ko: '수면 안내: 7~8시간 주무시면 혈당 조절에 도움이 돼요.', hi: 'नींद का सुझाव: 7-8 घंटे की नींद ब्लड शुगर नियंत्रित रखती है।' },
     'tip_checkup': { en: 'Reminder: Regular check-ups catch problems early.', ko: '알림: 정기 검진을 받으시면 문제를 일찍 발견할 수 있어요.', hi: 'याद रखें: नियमित जाँच से समस्याएँ जल्दी पकड़ में आती हैं।' },
 
@@ -110,17 +110,17 @@ const translations: Record<string, Record<string, string>> = {
 
     // Typing messages
     'typing_1': { en: 'Checking your health summary for today...', ko: '오늘의 건강 요약을 확인하고 있어요...', hi: 'आज का स्वास्थ्य सारांश देख रहे हैं...' },
-    'typing_2': { en: 'Your blood pressure is being monitored.', ko: '혈압을 모니터링하고 있습니다.', hi: 'आपका BP जाँचा जा रहा है।' },
+    'typing_2': { en: 'Your blood pressure is being monitored.', ko: '혈압을 확인하고 있어요...', hi: 'आपका BP जाँचा जा रहा है।' },
     'typing_3': { en: 'Reviewing your medication schedule...', ko: '복용 일정을 검토하고 있어요...', hi: 'आपकी दवाई का शेड्यूल देख रहे हैं...' },
-    'typing_4': { en: 'Keeping track of your upcoming appointments.', ko: '다가오는 예약을 확인하고 있습니다.', hi: 'आपकी आगामी अपॉइंटमेंट पर नज़र रख रहे हैं।' },
-    'typing_5': { en: 'Your care team is staying informed.', ko: '담당 의료팀이 최신 정보를 확인하고 있습니다.', hi: 'आपकी केयर टीम को जानकारी मिल रही है।' },
+    'typing_4': { en: 'Keeping track of your upcoming appointments.', ko: '다가오는 예약을 확인하고 있어요...', hi: 'आपकी आगामी अपॉइंटमेंट पर नज़र रख रहे हैं।' },
+    'typing_5': { en: 'Your care team is staying informed.', ko: '담당 의료팀이 최신 정보를 확인하고 있어요.', hi: 'आपकी केयर टीम को जानकारी मिल रही है।' },
 
     // TopBar / Emergency / Sidebar extras
     'notifications': { en: 'Notifications', ko: '알림', hi: 'सूचनाएँ' },
     'call_emergency': { en: 'Call Emergency', ko: '응급 전화', hi: 'इमरजेंसी कॉल करें' },
     'dark_mode': { en: 'Dark Mode', ko: '다크 모드', hi: 'डार्क मोड' },
     'text_size': { en: 'Text Size', ko: '글자 크기', hi: 'अक्षर का आकार' },
-    'color_vision': { en: 'Color Vision', ko: '색각 모드', hi: 'रंग दृष्टि' },
+    'color_vision': { en: 'Color Vision', ko: '색상 보정', hi: 'रंग दृष्टि' },
     'close': { en: 'Close', ko: '닫기', hi: 'बंद करें' },
     'care_partner': { en: 'Your Care Partner', ko: '나의 건강 파트너', hi: 'आपका देखभाल साथी' },
     'powered_by': { en: 'Powered by CareFlow AI', ko: 'CareFlow AI 기반', hi: 'CareFlow AI द्वारा संचालित' },

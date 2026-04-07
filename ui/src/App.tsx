@@ -25,7 +25,7 @@ export default function App() {
             case 'insights':
                 return <DoctorSummaryView agentChat={agentChat} onViewChange={(v) => setActiveView(v as ViewId)} />;
             case 'schedule':
-                return <ScheduleView agentChat={agentChat} />;
+                return <ScheduleView agentChat={agentChat} onViewChange={(v) => setActiveView(v as ViewId)} />;
             default:
                 return <PatientDashboardView agentChat={agentChat} onViewChange={(v) => setActiveView(v as ViewId)} />;
         }

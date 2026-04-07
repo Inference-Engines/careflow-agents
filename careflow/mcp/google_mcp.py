@@ -953,18 +953,10 @@ def get_gmail_tools() -> list:
     Returns:
         list of tool functions compatible with ADK FunctionTool registration.
     """
-    if _USE_REAL_MCP:
-        # ── 실제 MCP 모드 ──
-        # 비동기 초기화가 필요하므로 별도 async 헬퍼를 호출해야 합니다.
-        # Async initialization required -- use the async helper.
-        # 주의: 이 경로는 아직 구현되지 않았습니다.
-        # Note: This path is not yet implemented.
-        logger.warning(
-            "[Gmail MCP] CAREFLOW_USE_REAL_MCP=true but real MCP is not yet configured. "
-            "Returning fallback tools. See module docstring for OAuth setup instructions."
-        )
-
-    # ── 폴백 모드 — 즉시 사용 가능한 도구 반환 / Fallback mode ──
+    # ── Gmail 도구 반환 (OAuth fallback 포함) / Gmail tools with OAuth fallback ──
+    # MCP SSE 서버 연결은 async이므로 동기 함수에서는 fallback 도구를 반환.
+    # 실제 MCP 연결은 에이전트가 async 컨텍스트에서 _get_real_gmail_toolset()를 호출.
+    # Gmail OAuth 직접 호출은 fallback 도구(send_email)에서 이미 지원.
     return [
         send_email,
         search_email_log,
@@ -998,18 +990,8 @@ def get_calendar_tools() -> list:
     Returns:
         list of tool functions compatible with ADK FunctionTool registration.
     """
-    if _USE_REAL_MCP:
-        # ── 실제 MCP 모드 ──
-        # 비동기 초기화가 필요하므로 별도 async 헬퍼를 호출해야 합니다.
-        # Async initialization required -- use the async helper.
-        # 주의: 이 경로는 아직 구현되지 않았습니다.
-        # Note: This path is not yet implemented.
-        logger.warning(
-            "[Calendar MCP] CAREFLOW_USE_REAL_MCP=true but real MCP is not yet configured. "
-            "Returning fallback tools. See module docstring for OAuth setup instructions."
-        )
-
-    # ── 폴백 모드 — 즉시 사용 가능한 도구 반환 / Fallback mode ──
+    # ── Calendar 도구 반환 (OAuth fallback 포함) / Calendar tools with OAuth fallback ──
+    # Calendar OAuth 직접 호출은 fallback 도구(create_calendar_event 등)에서 이미 지원.
     return [
         create_calendar_event,
         list_calendar_events,

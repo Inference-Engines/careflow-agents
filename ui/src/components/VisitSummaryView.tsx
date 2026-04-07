@@ -207,8 +207,14 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                             </div>
                         </BentoCard>
 
-                        {/* Map Card */}
-                        <BentoCard stagger="stagger-5" innerClassName="p-0 overflow-hidden">
+                        {/* Map Card — 클릭 시 Google Maps 열림 */}
+                        <a
+                            href="https://www.google.com/maps/search/Apollo+Hospital+Sarita+Vihar+New+Delhi"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block cursor-pointer"
+                        >
+                        <BentoCard stagger="stagger-5" innerClassName="p-0 overflow-hidden hover:shadow-lg transition-shadow">
                             <div className="h-40 relative bg-surface-container-low">
                                 <img
                                     src={`https://maps.googleapis.com/maps/api/staticmap?center=Apollo+Hospital+Sarita+Vihar+New+Delhi&zoom=15&size=600x400&maptype=roadmap&markers=color:red%7CApollo+Hospital+Sarita+Vihar+New+Delhi&key=${GOOGLE_MAPS_API_KEY}&style=feature:all%7Csaturation:-30`}
@@ -225,11 +231,15 @@ const VisitSummaryView: React.FC<VisitSummaryViewProps> = ({ agentChat, onViewCh
                                     <Icon icon="solar:map-point-bold" width={36} className="text-primary drop-shadow-lg" />
                                 </div>
                             </div>
-                            <div className="p-5">
-                                <h5 className="font-bold text-slate-900 tracking-tight">Apollo Hospital</h5>
-                                <p className="text-base text-slate-600 mt-0.5">Sarita Vihar, New Delhi, 110076</p>
+                            <div className="p-5 flex items-center justify-between">
+                                <div>
+                                    <h5 className="font-bold text-slate-900 tracking-tight">Apollo Hospital</h5>
+                                    <p className="text-base text-slate-600 mt-0.5">Sarita Vihar, New Delhi, 110076</p>
+                                </div>
+                                <Icon icon="solar:arrow-right-up-linear" width={18} className="text-primary shrink-0" />
                             </div>
                         </BentoCard>
+                        </a>
                     </div>
                 </section>
 

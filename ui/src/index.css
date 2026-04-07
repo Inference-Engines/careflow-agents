@@ -337,6 +337,27 @@
 .high-contrast.dark .shadow-sm { box-shadow: 0 0 0 2px #64748b !important; }
 .high-contrast.dark .bg-white { background: var(--color-surface) !important; }
 
+/* ─── Text Size Scaling — 큰 글자에서 박스 오버플로우 방지 ──────────────── */
+/* 모든 컨테이너에 overflow + word-break 적용하여 텍스트 넘침 방지.
+   Apply overflow + word-break to all containers to prevent text overflow. */
+html[style*="18px"] *,
+html[style*="20px"] * {
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+html[style*="18px"], html[style*="20px"] {
+    .card-inner, .rounded-2xl, .rounded-3xl, [class*="rounded-"] { overflow: hidden; }
+    .truncate { white-space: normal !important; overflow: visible !important; text-overflow: unset !important; }
+    .text-xs { font-size: 0.75rem; }
+    .text-sm { font-size: 0.85rem; }
+    .p-4 { padding: 0.75rem; }
+    .p-5 { padding: 0.875rem; }
+    .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
+    .gap-3 { gap: 0.5rem; }
+    .w-72 { width: 15rem; }
+    h1, h2, h3, h4, h5 { line-height: 1.2; }
+}
+
 /* ─── Base Styles ────────────────────────────────────────────────────────── */
 @layer base {
     html {

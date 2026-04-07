@@ -350,12 +350,22 @@ const DoctorSummaryView: React.FC<DoctorSummaryViewProps> = ({ agentChat, onView
                                 desc="Patient noted mild tingling in peripheral check-in 2 days ago."
                             />
                             {customTopics.map((topic, i) => (
-                                <ConsultTopic
-                                    key={`custom-${i}`}
-                                    number={4 + i}
-                                    title={topic.title}
-                                    desc={topic.desc}
-                                />
+                                <li key={`custom-${i}`} className="p-4 rounded-2xl group bg-surface-container-low hover:bg-primary/5 transition-all duration-300 relative">
+                                    <div className="flex items-start gap-3">
+                                        <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-primary/10 text-primary font-bold text-sm flex items-center justify-center">{4 + i}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-900 text-sm tracking-tight">{topic.title}</p>
+                                            <p className="text-slate-500 text-xs mt-1 leading-relaxed">{topic.desc}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setCustomTopics(prev => prev.filter((_, idx) => idx !== i))}
+                                            className="shrink-0 w-7 h-7 rounded-lg text-slate-300 hover:text-error hover:bg-error-container flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                                            aria-label="Delete topic"
+                                        >
+                                            <Icon icon="solar:trash-bin-minimalistic-linear" width={15} />
+                                        </button>
+                                    </div>
+                                </li>
                             ))}
                         </ul>
                         <button

@@ -80,9 +80,10 @@ const statusConfig: Record<AppointmentStatus, { label: string; classes: string; 
 
 interface ScheduleViewProps {
     agentChat?: UseAgentChatReturn;
+    onViewChange?: (view: string) => void;
 }
 
-const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
+const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat, onViewChange }) => {
     const [appointments, setAppointments] = useState<Appointment[]>(FALLBACK_APPOINTMENTS);
     const [medSchedule, setMedSchedule] = useState(FALLBACK_MED_SCHEDULE);
     const [takenMeds, setTakenMeds] = useState<Set<string>>(new Set());
@@ -309,6 +310,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                                 <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Appointment Title</label>
                                 <input
                                     type="text"
+                                    lang="en"
                                     value={newApptTitle}
                                     onChange={(e) => setNewApptTitle(e.target.value)}
                                     placeholder="e.g. Follow-up with Dr. Mehta"
@@ -317,21 +319,23 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                                 />
                             </div>
                             <div>
-                                <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Date</label>
+                                <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Date (YYYY-MM-DD)</label>
                                 <input
-                                    type="date"
+                                    type="text"
                                     value={newApptDate}
                                     onChange={(e) => setNewApptDate(e.target.value)}
-                                    className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] transition-all"
+                                    placeholder="2026-04-15"
+                                    className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] placeholder:text-slate-300 transition-all"
                                 />
                             </div>
                             <div>
-                                <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Time</label>
+                                <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Time (HH:MM)</label>
                                 <input
-                                    type="time"
+                                    type="text"
                                     value={newApptTime}
                                     onChange={(e) => setNewApptTime(e.target.value)}
-                                    className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] transition-all"
+                                    placeholder="14:00"
+                                    className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-primary/30 focus:shadow-[0_0_0_4px_rgba(28,110,242,0.07)] placeholder:text-slate-300 transition-all"
                                 />
                             </div>
                         </div>
@@ -349,18 +353,34 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ agentChat }) => {
                             </button>
                             <button
                                 onClick={() => {
-                                    const parts = [newApptTitle.trim()];
+                                    const title = newApptTitle.trim();
+                                    if (!title) return;
+                                    const parts = [title];
                                     if (newApptDate) parts.push(`on ${newApptDate}`);
                                     if (newApptTime) parts.push(`at ${newApptTime}`);
-                                    if (parts[0]) {
-                                        agentChat?.sendMessage(
-                                            `Please book an appointment and create a Google Calendar event: ${parts.join(' ')}`,
-                                        );
-                                    }
+                                    // 에이전트에게 Google Calendar 이벤트 생성 요청
+                                    agentChat?.sendMessage(
+                                        `Please book an appointment and create a Google Calendar event: ${parts.join(' ')}`,
+                                    );
+                                    // 프론트엔드 리스트에 즉시 반영
+                                    setAppointments(prev => [...prev, {
+                                        id: `new-${Date.now()}`,
+                                        title,
+                                        date: newApptDate || new Date().toISOString().split('T')[0],
+                                        time: newApptTime || '10:00',
+                                        doctor: '',
+                                        location: '',
+                                        type: 'appointment',
+                                        status: 'upcoming',
+                                        note: '',
+                                        fasting_required: false,
+                                    }]);
                                     setNewApptTitle('');
                                     setNewApptDate('');
                                     setNewApptTime('');
                                     setShowAddModal(false);
+                                    // Home 채팅으로 이동하여 에이전트 응답 확인
+                                    if (onViewChange) onViewChange('home');
                                 }}
                                 disabled={!newApptTitle.trim()}
                                 className="flex-1 py-3 rounded-2xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"

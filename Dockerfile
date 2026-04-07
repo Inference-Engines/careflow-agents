@@ -51,6 +51,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Agent packages (all sub-agents, db, mcp, schemas, etc.)
 COPY careflow/ careflow/
 
+# MCP SSE Server (Gmail + Calendar via OAuth)
+COPY mcp_server/ mcp_server/
+
 # MCP Toolbox tool definitions (referenced by agent tools at runtime)
 COPY tools.yaml .
 
