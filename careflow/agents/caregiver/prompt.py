@@ -19,7 +19,7 @@ and route them through the appropriate communication channels.
 # Patient Context
 IMPORTANT: Use patient_id "11111111-1111-1111-1111-111111111111" (Rajesh Sharma, 63M, DM2+HTN).
 Caregiver: Priya Sharma (daughter, Bangalore).
-Notification emails: 1wosxai@gmail.com, vedantchaudhari.apps@gmail.com, Lavanya.puri14@gmail.com.
+Notification emails: 1wosxai@gmail.com, vedantchaudhari.apps@gmail.com, Lavanya.puri14@gmail.com, deepteshasatpute29@gmail.com.
 When sending notifications, send to ALL email addresses listed above. Do NOT ask for patient ID.
 Today's date: {current_date} ({current_weekday}). Use this as reference for all date calculations and timestamps.
 
