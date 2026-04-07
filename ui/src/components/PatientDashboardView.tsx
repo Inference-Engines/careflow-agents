@@ -459,12 +459,13 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                                 </div>
                                 <p className="text-sm text-slate-600 leading-relaxed">{proactiveAlert.message}</p>
                             </div>
-                        <button
-                            onClick={() => setProactiveAlert(null)}
-                            className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
-                        >
-                            <Icon icon="solar:close-circle-linear" width={18} />
-                        </button>
+                            <button
+                                onClick={() => setProactiveAlert(null)}
+                                className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+                            >
+                                <Icon icon="solar:close-circle-linear" width={18} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
