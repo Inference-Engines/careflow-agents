@@ -1,23 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import {
+  AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  CartesianGrid, ReferenceLine, Brush, Legend,
+} from 'recharts';
 import { fetchMetricTrend } from '../lib/api';
 
 interface Props {
   metricType: 'blood_pressure' | 'blood_glucose';
 }
 
+// ── 임상 기준선 / Clinical reference thresholds ──
+const BP_NORMAL = 130;    // systolic normal upper limit
+const BP_ELEVATED = 140;  // systolic elevated threshold
+const GLUCOSE_NORMAL = 100;
+const GLUCOSE_TARGET = 140;
+
 const ChatTrendChart: React.FC<Props> = ({ metricType }) => {
   const [data, setData] = useState<any[]>([]);
+  const [showBrush, setShowBrush] = useState(false);
 
   useEffect(() => {
     fetchMetricTrend(metricType, 90).then(d => {
       if (d?.length) {
-        // Format for recharts - take every 3rd point for cleaner chart
-        const formatted = d.filter((_: any, i: number) => i % 3 === 0).map((p: any) => ({
-          date: p.recorded_at?.slice(5, 10) || `D${p.day}`,
+        const formatted = d.map((p: any, i: number) => ({
+          day: i + 1,
+          date: p.recorded_at?.slice(5, 10) || p.date?.slice(5, 10) || `D${i + 1}`,
           value: metricType === 'blood_pressure'
             ? parseFloat(p.systolic || p.value?.toString().split('/')[0] || p.value || 0)
             : parseFloat(p.value || 0),
+          ...(metricType === 'blood_pressure' && {
+            diastolic: parseFloat(p.diastolic || p.value?.toString().split('/')[1] || 0),
+          }),
         }));
         setData(formatted);
       }
@@ -26,20 +39,121 @@ const ChatTrendChart: React.FC<Props> = ({ metricType }) => {
 
   if (!data.length) return null;
 
-  const color = metricType === 'blood_pressure' ? '#1C6EF2' : '#F59E0B';
-  const label = metricType === 'blood_pressure' ? 'Blood Pressure (mmHg)' : 'Blood Glucose (mg/dL)';
+  const isBP = metricType === 'blood_pressure';
+  const primaryColor = isBP ? '#1C6EF2' : '#F59E0B';
+  const secondaryColor = '#34D399';
+  const gradientId = `grad-${metricType}`;
+  const label = isBP ? 'Blood Pressure Trend' : 'Blood Glucose Trend';
+  const unit = isBP ? 'mmHg' : 'mg/dL';
+
+  const avg = Math.round(data.reduce((s, d) => s + d.value, 0) / data.length);
+  const min = Math.round(Math.min(...data.map(d => d.value)));
+  const max = Math.round(Math.max(...data.map(d => d.value)));
 
   return (
-    <div className="mt-3 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/10">
-      <p className="text-xs font-semibold text-slate-500 mb-2">{label} — 90 Day Trend</p>
-      <ResponsiveContainer width="100%" height={140}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant, #BFC4D9)" opacity={0.3} />
-          <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-          <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" domain={['auto', 'auto']} />
-          <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '12px' }} />
-          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} />
-        </LineChart>
+    <div className="mt-3 rounded-2xl bg-surface-container-low border border-outline-variant/10 overflow-hidden">
+      {/* Header */}
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold text-slate-700 tracking-tight">{label}</p>
+          <p className="text-[10px] text-slate-400">{data.length} readings · 90 days · AlloyDB</p>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">Avg {avg} {unit}</span>
+          <span className="text-slate-400">{min}–{max}</span>
+          <button
+            onClick={() => setShowBrush(b => !b)}
+            className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-medium transition-colors"
+          >
+            {showBrush ? 'Simple' : 'Zoom'}
+          </button>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <ResponsiveContainer width="100%" height={showBrush ? 200 : 160}>
+        <AreaChart data={data} margin={{ top: 8, right: 16, left: -10, bottom: showBrush ? 30 : 4 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={primaryColor} stopOpacity={0.2} />
+              <stop offset="95%" stopColor={primaryColor} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant, #BFC4D9)" opacity={0.2} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 9, fill: '#94a3b8' }}
+            interval={Math.floor(data.length / 6)}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fontSize: 9, fill: '#94a3b8' }}
+            domain={['auto', 'auto']}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              borderRadius: '14px',
+              fontSize: '11px',
+              padding: '8px 12px',
+              background: 'var(--color-surface, #fff)',
+              border: '1px solid var(--color-outline-variant, #e2e8f0)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            }}
+            labelStyle={{ fontWeight: 700, marginBottom: 4 }}
+            formatter={(val: number) => [`${val} ${unit}`, isBP ? 'Systolic' : 'Glucose']}
+          />
+
+          {/* Reference lines — clinical thresholds */}
+          {isBP && (
+            <>
+              <ReferenceLine y={BP_NORMAL} stroke="#059669" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Normal', fontSize: 9, fill: '#059669', position: 'right' }} />
+              <ReferenceLine y={BP_ELEVATED} stroke="#DC2626" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Elevated', fontSize: 9, fill: '#DC2626', position: 'right' }} />
+            </>
+          )}
+          {!isBP && (
+            <>
+              <ReferenceLine y={GLUCOSE_NORMAL} stroke="#059669" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Normal', fontSize: 9, fill: '#059669', position: 'right' }} />
+              <ReferenceLine y={GLUCOSE_TARGET} stroke="#DC2626" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Target', fontSize: 9, fill: '#DC2626', position: 'right' }} />
+            </>
+          )}
+
+          {/* Main line + gradient fill */}
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={primaryColor}
+            strokeWidth={2}
+            fill={`url(#${gradientId})`}
+            dot={false}
+            activeDot={{ r: 4, stroke: primaryColor, strokeWidth: 2, fill: '#fff' }}
+            animationDuration={1200}
+            animationEasing="ease-out"
+          />
+
+          {/* Diastolic line for BP */}
+          {isBP && (
+            <Area
+              type="monotone"
+              dataKey="diastolic"
+              stroke={secondaryColor}
+              strokeWidth={1.5}
+              fill="none"
+              dot={false}
+              activeDot={{ r: 3, stroke: secondaryColor, strokeWidth: 2, fill: '#fff' }}
+              animationDuration={1200}
+            />
+          )}
+
+          {isBP && <Legend verticalAlign="top" height={20} iconType="line" wrapperStyle={{ fontSize: 10 }} />}
+
+          {/* Brush for zoom/pan */}
+          {showBrush && (
+            <Brush dataKey="date" height={20} stroke={primaryColor} travellerWidth={8} />
+          )}
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );
