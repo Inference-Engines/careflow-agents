@@ -223,6 +223,11 @@
 .dark .bg-red-600 { background: #DC2626 !important; }  /* keep visible on dark — emergency banner */
 .dark .bg-amber-100 { background: rgba(251,191,36,0.15) !important; }
 
+/* -- Dark: Proactive Alert 배너 가독성 / Proactive Alert readability ------ */
+.dark .bg-gradient-to-r.from-error\/5 { background: linear-gradient(to right, rgba(248,113,113,0.12), var(--color-surface)) !important; }
+.dark .bg-gradient-to-r.from-amber-50 { background: linear-gradient(to right, rgba(251,191,36,0.12), var(--color-surface)) !important; }
+.dark .shadow-card { box-shadow: 0 4px 24px -4px rgba(0,0,0,0.5), 0 0 0 1px rgba(51,65,85,0.2); }
+
 /* -- Dark: text colors missing overrides (non-slate) -------------------- */
 .dark .text-red-600 { color: #F87171 !important; }      /* Red 400 — visible on dark surfaces */
 .dark .text-amber-600 { color: #FBBF24 !important; }    /* Amber 400 — visible on dark surfaces */
