@@ -1,0 +1,359 @@
+/* ─── Fonts ──────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+/* ─── Design Tokens ──────────────────────────────────────────────────────── */
+@theme {
+    /* Typography */
+    --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-headline: "Geist", sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, monospace;
+
+    /* Primary — CareFlow Blue */
+    --color-primary:           #1C6EF2;
+    --color-primary-container: #2E7CF6;
+    --color-primary-dim:       #1855C0;
+    --color-on-primary:        #ffffff;
+
+    /* Secondary — Emerald */
+    --color-secondary:           #059669;
+    --color-secondary-container: #D1FAE5;
+
+    /* Tertiary — Amber */
+    --color-tertiary:           #B45309;
+    --color-tertiary-container: #FEF3C7;
+
+    /* Error — softened for healthcare (less alarming) */
+    --color-error:           #E53E3E;
+    --color-error-container: #FFF5F5;
+
+    /* Health Status Semantic Colors */
+    --color-critical:     #DC2626;
+    --color-warning:      #F59E0B;
+    --color-normal:       #059669;
+    --color-info:         #1C6EF2;
+    --color-drug-alert:   #DC2626;
+    --color-drug-caution: #F59E0B;
+
+    /* Card Radii */
+    --radius-card:    1.5rem;
+    --radius-element: 1rem;
+
+    /* Surfaces — warm shift */
+    --color-background:               #F8F9FC;
+    --color-surface:                  #FFFFFF;
+    --color-surface-container-low:    #F1F3F9;
+    --color-surface-container:        #EAECF4;
+    --color-surface-container-high:   #DFE2EE;
+    --color-surface-container-highest:#D4D8E6;
+
+    /* Borders */
+    --color-outline:         #6B7489;
+    --color-outline-variant: #BFC4D9;
+}
+
+/* ─── Base Styles ────────────────────────────────────────────────────────── */
+@layer base {
+    html {
+        scroll-behavior: smooth;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+
+    body {
+        @apply bg-background text-slate-900 font-sans antialiased;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        @apply font-headline;
+        letter-spacing: -0.02em;
+    }
+
+    /* Smooth custom scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--color-outline); }
+}
+
+/* ─── Spring Easing ──────────────────────────────────────────────────────── */
+/* The Supanova motion signature — applied to ALL interactive elements */
+@layer utilities {
+    .spring {
+        transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .spring-fast {
+        transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+}
+
+/* ─── Scroll-Reveal Animation ────────────────────────────────────────────── */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(1.5rem);
+        filter: blur(3px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-12px); }
+}
+
+@keyframes pulseRing {
+    0%   { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position: 200% 0; }
+}
+
+.animate-reveal {
+    opacity: 0;
+    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-float {
+    animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-ring {
+    animation: pulseRing 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* Stagger delays for sibling reveals */
+.stagger-1 { animation-delay: 80ms; }
+.stagger-2 { animation-delay: 160ms; }
+.stagger-3 { animation-delay: 240ms; }
+.stagger-4 { animation-delay: 320ms; }
+.stagger-5 { animation-delay: 400ms; }
+
+/* ─── Double-Bezel Card Architecture ─────────────────────────────────────── */
+/* Outer shell: the "aluminum tray" */
+.card-outer {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(28, 110, 242, 0.08);
+    box-shadow:
+        0 1px 2px rgba(28, 110, 242, 0.04),
+        0 20px 60px -15px rgba(28, 110, 242, 0.07);
+    border-radius: 1.75rem;
+    padding: 6px;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-outer:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 1px 2px rgba(28, 110, 242, 0.04),
+        0 24px 64px -12px rgba(28, 110, 242, 0.1);
+}
+.card-outer:active {
+    transform: scale(0.98);
+}
+
+/* Inner core: the "glass plate" */
+.card-inner {
+    background: #ffffff;
+    border-radius: calc(1.75rem - 6px);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9);
+    height: 100%;
+}
+
+/* ─── Glassmorphism ──────────────────────────────────────────────────────── */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.glass-surface {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(28, 110, 242, 0.08);
+}
+
+/* ─── Premium CTA Button ─────────────────────────────────────────────────── */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.75rem;
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 700;
+    border-radius: 9999px;
+    box-shadow: 0 8px 32px -8px rgba(28, 110, 242, 0.35);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    letter-spacing: -0.01em;
+}
+.btn-primary:hover {
+    transform: scale(1.025);
+    box-shadow: 0 12px 40px -8px rgba(28, 110, 242, 0.4);
+}
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+/* Nested icon container inside CTA — Supanova pattern */
+.btn-icon-wrap {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-primary:hover .btn-icon-wrap {
+    transform: translateX(2px);
+}
+
+/* ─── Eyebrow Pill Tag ───────────────────────────────────────────────────── */
+.eyebrow {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: rgba(28, 110, 242, 0.09);
+    color: var(--color-primary);
+}
+
+/* ─── Metric Display ─────────────────────────────────────────────────────── */
+.metric-value {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    letter-spacing: -0.03em;
+    line-height: 1;
+}
+
+/* ─── Health Status Semantic Classes ─────────────────────────────────────── */
+.status-normal   { --accent: #059669; }
+.status-caution  { --accent: #B45309; }
+.status-alert    { --accent: #E53E3E; }
+.status-info     { --accent: #1C6EF2; }
+
+/* ─── No-scrollbar utility ──────────────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Micro-interactions ────────────────────────────────────────────────── */
+@layer utilities {
+    .hover-lift {
+        transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .hover-lift:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px -12px rgba(28, 110, 242, 0.12);
+    }
+}
+
+/* ─── Skeleton shimmer ──────────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+/* ─── Agent Activity Feed Animations ──────────────────────────────────── */
+@keyframes shimmer-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-shimmer-bar {
+  animation: shimmer-bar 2s infinite;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* -- Cursor Blink (typing animation) ------------------------------------ */
+.cursor-blink::after {
+    content: '|';
+    color: var(--color-primary, #1C6EF2);
+    animation: blink 1s step-end infinite;
+    margin-left: 2px;
+}
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* -- Typing text animation ---------------------------------------------- */
+.typing-text {
+    display: inline;
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 2px solid var(--color-primary, #1C6EF2);
+    animation: typing 3s steps(40) forwards, blink-caret 0.75s step-end infinite;
+}
+@keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+}
+@keyframes blink-caret {
+    50% { border-color: transparent; }
+}
+
+/* -- Prompt Chip glow/wave hover (Spotify NLQ style) -------------------- */
+.prompt-chip {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.prompt-chip::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(28, 110, 242, 0.12) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+.prompt-chip:hover {
+    background: rgba(28, 110, 242, 0.08);
+    box-shadow: 0 4px 20px -4px rgba(28, 110, 242, 0.18);
+    transform: translateY(-2px);
+    border-color: rgba(28, 110, 242, 0.2);
+}
+.prompt-chip:hover::before {
+    opacity: 1;
+}
+
+/* Safe area padding for mobile bottom nav */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
+/* Mobile: ensure no horizontal overflow */
+@media (max-width: 768px) {
+    body {
+        overflow-x: hidden;
+    }
+}

@@ -1,0 +1,61 @@
+{
+  "hash": "a019ae5a",
+  "configHash": "3589d4c5",
+  "lockfileHash": "394609d1",
+  "browserHash": "5f435e31",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "692ad71f",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "0f9be18e",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "55e72344",
+      "needsInterop": true
+    },
+    "motion/react": {
+      "src": "../../node_modules/motion/dist/es/react.mjs",
+      "file": "motion_react.js",
+      "fileHash": "451b465f",
+      "needsInterop": false
+    },
+    "@iconify/react": {
+      "src": "../../node_modules/@iconify/react/dist/iconify.js",
+      "file": "@iconify_react.js",
+      "fileHash": "45d31416",
+      "needsInterop": false
+    },
+    "recharts": {
+      "src": "../../node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "5d61b7c5",
+      "needsInterop": false
+    },
+    "react-markdown": {
+      "src": "../../node_modules/react-markdown/index.js",
+      "file": "react-markdown.js",
+      "fileHash": "eca87275",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-O5BR4D4V": {
+      "file": "chunk-O5BR4D4V.js"
+    },
+    "chunk-LK2C3P3N": {
+      "file": "chunk-LK2C3P3N.js"
+    },
+    "chunk-354VVPGE": {
+      "file": "chunk-354VVPGE.js"
+    }
+  }
+}

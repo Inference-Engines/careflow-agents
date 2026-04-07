@@ -40,3 +40,4 @@ test_result.txt
 # Local binaries
 tools/
 *.exe
+.claude/
