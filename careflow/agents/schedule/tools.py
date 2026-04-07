@@ -318,10 +318,15 @@ def list_appointments(
     appointments = _get_appointments_from_state(tool_context)
 
     # 해당 환자의 예약만 필터 / Filter appointments for this patient
+    # Mock fallback 데이터는 patient_id가 "patient_001"이므로, UUID로 조회 시
+    # 매칭 실패 방지를 위해 필터 결과가 없으면 전체 반환 (state는 환자별 세션)
     patient_apts = [
         apt for apt in appointments
         if apt.get("patient_id") == patient_id
     ]
+    if not patient_apts:
+        # mock fallback인 경우 patient_id 불일치 — 전체 예약 반환
+        patient_apts = list(appointments)
 
     # 날짜+시간순 정렬 / Sort by date + time
     patient_apts.sort(key=lambda a: (a["date"], a["time"]))

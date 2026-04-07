@@ -457,8 +457,8 @@ async def get_recent_visits(patient_id: str, limit: int = 5):
     """최근 방문 기록 / Recent visit records (AlloyDB -> mock fallback)."""
     rows = query_dict(
         """
-        SELECT id, visit_date, type, provider, summary, notes
-        FROM visits
+        SELECT id, visit_date, doctor_name AS provider, structured_summary AS summary, key_findings AS notes
+        FROM visit_records
         WHERE patient_id = :pid
         ORDER BY visit_date DESC
         LIMIT :lim
@@ -478,9 +478,10 @@ async def get_caregiver(patient_id: str):
     """보호자 정보 조회 / Caregiver info (AlloyDB -> mock fallback)."""
     rows = query_dict(
         """
-        SELECT id, name, relationship, phone, email, is_primary
-        FROM caregivers
-        WHERE patient_id = :pid AND is_primary = true
+        SELECT c.id, c.name, c.relationship, c.phone, c.email
+        FROM caregivers c
+        JOIN patients p ON p.caregiver_id = c.id
+        WHERE p.id = :pid
         LIMIT 1
         """,
         {"pid": patient_id},
