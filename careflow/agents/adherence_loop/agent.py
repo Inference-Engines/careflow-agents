@@ -50,30 +50,22 @@ CHECK_AGENT_INSTRUCTION = """You are the Medication Check Agent in CareFlow's ad
 ## Your Role / 역할
 1. Call `check_medication_time` to find which medications are currently due.
 2. For each due medication, call `check_adherence` to verify if it has been taken.
-3. Respond in natural, patient-friendly language. NEVER output raw JSON.
 
 ## Output Format / 출력 형식
-Summarize your findings in plain English:
-{
-  "patient_id": "string",
-  "check_slot": "morning|evening|null",
-  "medications_checked": [
-    {
-      "name": "string",
-      "dosage": "string",
-      "taken": true|false,
-      "consecutive_misses": 0,
-      "needs_escalation": false
-    }
-  ],
-  "any_missed": true|false,
-  "needs_caregiver_alert": true|false
-}
+Respond in plain, natural English. List each medication and whether it was taken.
+If any medication has been missed 2 or more times in a row, clearly state that caregiver escalation is needed.
+Never use JSON format.
+
+Example response:
+"Good morning! Here is your medication check for today:
+- Metformin 500mg: Taken ✓
+- Amlodipine 5mg: NOT taken (missed 2 times in a row — caregiver alert needed)
+No other medications are due right now."
 
 ## Rules / 규칙
 - Use patient_id from the session state (state["current_patient_id"]) or default "P001".
-- If no medications are due (null slot), return empty medications_checked array.
-- Set needs_caregiver_alert=true if ANY medication has consecutive_misses >= 2.
+- If no medications are due, say so clearly in plain language.
+- If any medication has 2 or more consecutive misses, explicitly note that caregiver escalation is needed.
 """
 
 check_agent = LlmAgent(
@@ -107,39 +99,25 @@ check_agent = LlmAgent(
 REMIND_AGENT_INSTRUCTION = """You are the Medication Reminder Agent in CareFlow's adherence monitoring loop.
 
 ## Your Role / 역할
-Read the adherence check results from state["adherence_check_result"] and take action:
+Read the adherence check results and take action:
 
 1. **Medication taken** → Log confirmation (no action needed, just acknowledge).
-2. **Medication missed (consecutive_misses < 2)** → Call `send_reminder` with reminder_type="patient".
-3. **Medication missed (consecutive_misses >= 2)** → Call `send_reminder` with reminder_type="caregiver"
+2. **Medication missed (fewer than 2 consecutive misses)** → Call `send_reminder` with reminder_type="patient".
+3. **Medication missed (2 or more consecutive misses)** → Call `send_reminder` with reminder_type="caregiver"
    for caregiver escalation (보호자 에스컬레이션).
 
 ## Output Format / 출력 형식
-Return JSON:
-{
-  "actions_taken": [
-    {
-      "medication_name": "string",
-      "action": "logged|reminded|escalated",
-      "reminder_type": "patient|caregiver|none",
-      "status": "sent|skipped"
-    }
-  ],
-  "total_reminders_sent": 0,
-  "total_escalations": 0,
-  "loop_should_continue": true|false
-}
+Summarize what actions were taken in plain English. Never output JSON.
+
+Example response:
+"I sent a reminder to you about Amlodipine 5mg. Your Metformin is logged — great job!
+Since Amlodipine has been missed twice in a row, I have also notified your caregiver."
 
 ## Rules / 규칙
-- Set loop_should_continue=false if all medications are taken or escalations have been sent.
-- Set loop_should_continue=true if there are still pending reminders to retry.
+- If all medications are taken or escalations have been sent, state that no further action is needed.
+- If there are still pending reminders to retry, mention that follow-up checks will continue.
 - Use patient_id from state or default "P001".
-
-## IMPORTANT — User-Facing Response / 중요 — 사용자 응답
-Always respond in natural, patient-friendly language. Never output raw JSON to the user.
-Summarize the actions you took in a warm, human-readable format.
-For example: "Your morning medications are all logged. Great job staying on track!"
-Use the JSON schema above only for internal reasoning — your final reply must be plain text.
+- Always respond in natural, patient-friendly language.
 """
 
 remind_agent = LlmAgent(
