@@ -643,19 +643,26 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                                             )}
                                         {/* TTS speak/stop button for assistant messages */}
                                         {msg.role === 'assistant' && msg.content && !isStreaming && tts.supported && (
-                                            <button
-                                                onClick={() => tts.speak(msg.content, msg.id)}
-                                                className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 hover:text-primary transition-colors duration-200"
-                                                title={tts.speakingMessageId === msg.id ? 'Stop reading' : 'Read aloud'}
-                                            >
-                                                <Icon
-                                                    icon={tts.speakingMessageId === msg.id
-                                                        ? 'solar:volume-cross-bold'
-                                                        : 'solar:volume-loud-bold'}
-                                                    width={14}
-                                                />
-                                                <span>{tts.speakingMessageId === msg.id ? 'Stop' : 'Read aloud'}</span>
-                                            </button>
+                                            <div className="mt-2 pt-2 border-t border-slate-100">
+                                                <button
+                                                    onClick={() => tts.speakingMessageId === msg.id ? tts.stop() : tts.speak(msg.content, msg.id)}
+                                                    className={cn(
+                                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-200",
+                                                        tts.speakingMessageId === msg.id
+                                                            ? "bg-red-50 hover:bg-red-100 text-red-600"
+                                                            : "bg-blue-50 hover:bg-blue-100 text-blue-600"
+                                                    )}
+                                                    title={tts.speakingMessageId === msg.id ? 'Stop reading' : 'Listen'}
+                                                >
+                                                    <Icon
+                                                        icon={tts.speakingMessageId === msg.id
+                                                            ? 'solar:volume-cross-bold'
+                                                            : 'solar:volume-loud-bold'}
+                                                        width={16}
+                                                    />
+                                                    <span>{tts.speakingMessageId === msg.id ? 'Stop' : 'Listen'}</span>
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
