@@ -610,6 +610,12 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                                                         {/blood glucose|blood sugar|glucose trend|HbA1c/i.test(msg.content) && (
                                                             <ChatTrendChart metricType="blood_glucose" />
                                                         )}
+                                                        {/weight|body weight|kg trend|BMI/i.test(msg.content) && (
+                                                            <ChatTrendChart metricType="weight" />
+                                                        )}
+                                                        {/heart rate|pulse|bpm|resting heart|HR trend/i.test(msg.content) && (
+                                                            <ChatTrendChart metricType="heart_rate" />
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <div className="flex flex-col gap-1">

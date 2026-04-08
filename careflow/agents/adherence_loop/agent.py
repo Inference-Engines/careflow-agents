@@ -134,6 +134,12 @@ Return JSON:
 - Set loop_should_continue=false if all medications are taken or escalations have been sent.
 - Set loop_should_continue=true if there are still pending reminders to retry.
 - Use patient_id from state or default "P001".
+
+## IMPORTANT — User-Facing Response / 중요 — 사용자 응답
+Always respond in natural, patient-friendly language. Never output raw JSON to the user.
+Summarize the actions you took in a warm, human-readable format.
+For example: "Your morning medications are all logged. Great job staying on track!"
+Use the JSON schema above only for internal reasoning — your final reply must be plain text.
 """
 
 remind_agent = LlmAgent(
@@ -141,7 +147,6 @@ remind_agent = LlmAgent(
     model="gemini-2.5-flash",
     instruction=REMIND_AGENT_INSTRUCTION,
     tools=[send_reminder],
-    output_key="adherence_remind_result",
     description=(
         "Sends medication reminders to patient or escalates to "
         "caregiver after consecutive misses"

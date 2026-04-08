@@ -6,7 +6,7 @@ import {
 import { fetchMetricTrend } from '../lib/api';
 
 interface Props {
-  metricType: 'blood_pressure' | 'blood_glucose';
+  metricType: 'blood_pressure' | 'blood_glucose' | 'weight' | 'heart_rate';
 }
 
 // ── 임상 기준선 / Clinical reference thresholds ──
@@ -14,6 +14,10 @@ const BP_NORMAL = 130;    // systolic normal upper limit
 const BP_ELEVATED = 140;  // systolic elevated threshold
 const GLUCOSE_NORMAL = 100;
 const GLUCOSE_TARGET = 140;
+const WEIGHT_LOW = 50;    // kg — healthy lower bound (reference)
+const WEIGHT_HIGH = 90;   // kg — overweight threshold (reference)
+const HR_NORMAL = 60;     // bpm — resting lower bound
+const HR_ELEVATED = 100;  // bpm — resting upper bound
 
 const ChatTrendChart: React.FC<Props> = ({ metricType }) => {
   const [data, setData] = useState<any[]>([]);
@@ -40,11 +44,31 @@ const ChatTrendChart: React.FC<Props> = ({ metricType }) => {
   if (!data.length) return null;
 
   const isBP = metricType === 'blood_pressure';
-  const primaryColor = isBP ? '#1C6EF2' : '#F59E0B';
+  const isWeight = metricType === 'weight';
+  const isHR = metricType === 'heart_rate';
+  const colorMap: Record<string, string> = {
+    blood_pressure: '#1C6EF2',
+    blood_glucose: '#F59E0B',
+    weight: '#8B5CF6',
+    heart_rate: '#EF4444',
+  };
+  const primaryColor = colorMap[metricType] ?? '#1C6EF2';
   const secondaryColor = '#34D399';
   const gradientId = `grad-${metricType}`;
-  const label = isBP ? 'Blood Pressure Trend' : 'Blood Glucose Trend';
-  const unit = isBP ? 'mmHg' : 'mg/dL';
+  const labelMap: Record<string, string> = {
+    blood_pressure: 'Blood Pressure Trend',
+    blood_glucose: 'Blood Glucose Trend',
+    weight: 'Weight Trend',
+    heart_rate: 'Heart Rate Trend',
+  };
+  const unitMap: Record<string, string> = {
+    blood_pressure: 'mmHg',
+    blood_glucose: 'mg/dL',
+    weight: 'kg',
+    heart_rate: 'bpm',
+  };
+  const label = labelMap[metricType] ?? metricType;
+  const unit = unitMap[metricType] ?? '';
 
   const avg = Math.round(data.reduce((s, d) => s + d.value, 0) / data.length);
   const min = Math.round(Math.min(...data.map(d => d.value)));
@@ -103,7 +127,13 @@ const ChatTrendChart: React.FC<Props> = ({ metricType }) => {
               boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
             }}
             labelStyle={{ fontWeight: 700, marginBottom: 4 }}
-            formatter={(val: number) => [`${val} ${unit}`, isBP ? 'Systolic' : 'Glucose']}
+            formatter={(val: number, name: string) => {
+              const tooltipLabel: Record<string, string> = {
+                blood_pressure: 'Systolic', blood_glucose: 'Glucose',
+                weight: 'Weight', heart_rate: 'Heart Rate',
+              };
+              return [`${val} ${unit}`, name === 'diastolic' ? 'Diastolic' : tooltipLabel[metricType] ?? metricType];
+            }}
           />
 
           {/* Reference lines — clinical thresholds */}
@@ -113,10 +143,22 @@ const ChatTrendChart: React.FC<Props> = ({ metricType }) => {
               <ReferenceLine y={BP_ELEVATED} stroke="#DC2626" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Elevated', fontSize: 9, fill: '#DC2626', position: 'right' }} />
             </>
           )}
-          {!isBP && (
+          {metricType === 'blood_glucose' && (
             <>
               <ReferenceLine y={GLUCOSE_NORMAL} stroke="#059669" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Normal', fontSize: 9, fill: '#059669', position: 'right' }} />
               <ReferenceLine y={GLUCOSE_TARGET} stroke="#DC2626" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Target', fontSize: 9, fill: '#DC2626', position: 'right' }} />
+            </>
+          )}
+          {isWeight && (
+            <>
+              <ReferenceLine y={WEIGHT_LOW} stroke="#059669" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Low', fontSize: 9, fill: '#059669', position: 'right' }} />
+              <ReferenceLine y={WEIGHT_HIGH} stroke="#DC2626" strokeDasharray="4 4" opacity={0.6} label={{ value: 'High', fontSize: 9, fill: '#DC2626', position: 'right' }} />
+            </>
+          )}
+          {isHR && (
+            <>
+              <ReferenceLine y={HR_NORMAL} stroke="#059669" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Normal', fontSize: 9, fill: '#059669', position: 'right' }} />
+              <ReferenceLine y={HR_ELEVATED} stroke="#DC2626" strokeDasharray="4 4" opacity={0.6} label={{ value: 'Elevated', fontSize: 9, fill: '#DC2626', position: 'right' }} />
             </>
           )}
 
