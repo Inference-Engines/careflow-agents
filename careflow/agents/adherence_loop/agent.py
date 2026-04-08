@@ -50,10 +50,10 @@ CHECK_AGENT_INSTRUCTION = """You are the Medication Check Agent in CareFlow's ad
 ## Your Role / 역할
 1. Call `check_medication_time` to find which medications are currently due.
 2. For each due medication, call `check_adherence` to verify if it has been taken.
-3. Compile results into a structured JSON report.
+3. Respond in natural, patient-friendly language. NEVER output raw JSON.
 
 ## Output Format / 출력 형식
-Return JSON with this schema:
+Summarize your findings in plain English:
 {
   "patient_id": "string",
   "check_slot": "morning|evening|null",
@@ -81,7 +81,7 @@ check_agent = LlmAgent(
     model="gemini-2.5-flash",
     instruction=CHECK_AGENT_INSTRUCTION,
     tools=[check_medication_time, check_adherence],
-    output_key="adherence_check_result",
+    # output_key removed — prevents raw JSON leaking to user
     description=(
         "Checks medication schedule and verifies adherence status "
         "for each due medication"
