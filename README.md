@@ -1,17 +1,24 @@
 # CareFlow — AI Care Coordinator for Chronic Disease Patients
 
-> One doctor visit. Eight AI agents. Continuous care.
+<p align="center">
+  <em>One doctor visit. Eight AI agents. Continuous care.</em>
+</p>
 
 <p align="center">
   <a href="https://careflow-892626469440.us-central1.run.app">
-    <img src="https://img.shields.io/badge/Live%20Demo-Cloud%20Run-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white" alt="Live Demo" />
+    <img src="https://img.shields.io/badge/🌐_Live_Demo-Click_Here-blue?style=for-the-badge" alt="Live Demo" />
+  </a>
+  <a href="https://vision.hack2skill.com/event/apac-genaiacademy">
+    <img src="https://img.shields.io/badge/Google_Cloud-APAC_Academy-4285F4?style=for-the-badge&logo=google-cloud" alt="Google Cloud APAC Academy" />
   </a>
 </p>
 
-**Live Demo:** https://careflow-892626469440.us-central1.run.app
-
-<!-- Replace with actual screenshot -->
-<!-- ![CareFlow Screenshot](docs/screenshot.png) -->
+<p align="center">
+  <img src="https://img.shields.io/badge/Agents-8_Specialized-FF6F00?style=flat-square" alt="8 Agents" />
+  <img src="https://img.shields.io/badge/Safety-7_Layer_System-34A853?style=flat-square" alt="7 Layer Safety" />
+  <img src="https://img.shields.io/badge/Intents-9_Categories-8E75B2?style=flat-square" alt="9 Intents" />
+  <img src="https://img.shields.io/badge/RAG-Agentic_HyDE+SelfRAG-EA4335?style=flat-square" alt="Agentic RAG" />
+</p>
 
 ---
 
@@ -84,35 +91,16 @@ User Query
 
 ## Tech Stack
 
-| Category | Technology |
-|----------|-----------|
-| Agent Framework | Google ADK (LlmAgent, SequentialAgent, ParallelAgent, LoopAgent) |
-| LLM | Gemini 2.5 Flash (sub-agents) / Gemini 2.5 Pro (root_agent production) |
-| Embeddings | Gemini `text-embedding-005` (768d, asymmetric task_type) |
-| Database | AlloyDB + pgvector (HNSW index, m=16, ef=64) |
-| Vector Search | Hybrid: pgvector dense + PostgreSQL BM25 + RRF fusion |
-| MCP Tools | MCP Toolbox for Databases, Google Calendar MCP, Gmail MCP |
-| Drug Safety | openFDA Drug Labels API (real-time, FDA-authorized) |
-| Deployment | Google Cloud Run + Docker |
-| Frontend | ADK Web UI + Interactive Charts + STT/TTS |
-| Testing | pytest (unit + e2e smoke tests) |
-
-## Quick Start
-
-```bash
-# Install dependencies
-pip install google-adk google-genai python-dotenv pytest
-
-# Authenticate
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
-
-# Run tests
-python -m pytest careflow/tests/ -v
-
-# Launch
-adk web .
-```
+![Google ADK](https://img.shields.io/badge/Google_ADK-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini_2.5-8E75B2?style=for-the-badge&logo=google&logoColor=white)
+![AlloyDB](https://img.shields.io/badge/AlloyDB-34A853?style=for-the-badge&logo=postgresql&logoColor=white)
+![Cloud Run](https://img.shields.io/badge/Cloud_Run-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![pgvector](https://img.shields.io/badge/pgvector-336791?style=for-the-badge&logo=postgresql&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP_Protocol-FF6F00?style=for-the-badge&logo=google&logoColor=white)
 
 ## Intent Routing
 
@@ -131,13 +119,6 @@ adk web .
 ## Team
 
 **Team Inference Engines** — Google Cloud Gen AI Academy APAC Edition, Cohort 1
-
-| Member | Contribution |
-|--------|-------------|
-| Somi | root_agent orchestration, Health Insight, Diet/Nutrition, Symptom Triage, Adherence Loop, Safety/HITL, Agentic RAG, openFDA DDI, integration |
-| Deeptesha | Caregiver Agent + Gmail MCP |
-| thatengineerguy | Task Agent + Medical Info Agent |
-| Lavanya | Schedule Agent + Google Calendar MCP |
 
 ---
 
