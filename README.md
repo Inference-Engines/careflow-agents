@@ -25,7 +25,7 @@
   <img src="https://img.shields.io/badge/Agents-8-FF6F00?style=flat-square" />
   <img src="https://img.shields.io/badge/Safety-7_Layers-34A853?style=flat-square" />
   <img src="https://img.shields.io/badge/Intents-9-8E75B2?style=flat-square" />
-  <img src="https://img.shields.io/badge/Tests-94_Passed-blue?style=flat-square" />
+  <img src="https://img.shields.io/badge/MCP-3_Integrations-FF6F00?style=flat-square" />
 </p>
 
 ---
@@ -39,6 +39,10 @@
 ## The Solution
 
 CareFlow bridges the post-visit care gap with **8 specialized AI agents** orchestrated by a single `root_agent`, routing across 9 intent categories with real infrastructure — AlloyDB, 3 MCP integrations, and Agentic RAG.
+
+<p align="center">
+  <img src="diagrams/demo_dashboard_full.png" alt="CareFlow Dashboard" width="700" />
+</p>
 
 <table>
 <tr>
@@ -54,6 +58,36 @@ CareFlow bridges the post-visit care gap with **8 specialized AI agents** orches
 <td align="center"><b>Health Charts</b><br>BP, glucose, weight</td>
 </tr>
 </table>
+
+## How It Works
+
+**Scenario: Rajesh visits his doctor and gets new medication**
+
+> 1. Rajesh tells CareFlow: *"Doctor changed my medication today"*
+> 2. `root_agent` routes to `post_visit_sequential` workflow
+> 3. `task_agent` extracts medications + checks drug interactions via openFDA
+> 4. `schedule_agent` books follow-up on Google Calendar via MCP
+> 5. `medical_info_agent` retrieves visit history via Agentic RAG
+> 6. `diet_nutrition_agent` adjusts meal plan for new medications
+> 7. `caregiver_agent` sends summary to daughter Priya via Gmail MCP
+
+**All 7 steps happen automatically in one conversation turn.**
+
+<p align="center">
+  <img src="diagrams/demo_visit_summary.png" alt="Visit Summary + Caregiver Notification" width="700" />
+</p>
+
+## MCP Integrations
+
+| MCP Tool | Purpose | Agent |
+|----------|---------|-------|
+| **Google Calendar** | Appointment booking, reminders, conflict detection | `schedule_agent` |
+| **Gmail** | Caregiver notifications, visit summaries | `caregiver_agent` |
+| **MCP Toolbox for Databases** | 7 SQL tools for AlloyDB queries | All data agents |
+
+<p align="center">
+  <img src="diagrams/demo_calendar_event.png" alt="Google Calendar MCP Integration" width="600" />
+</p>
 
 ## Architecture
 
@@ -76,11 +110,20 @@ flowchart LR
     C -->|"< 0.6"| LOW["Refuse"]
 ```
 
+## Demo
+
+<table>
+<tr>
+<td align="center" width="50%"><b>Doctor's Pre-Visit View</b><br><img src="diagrams/demo_doctor_view.png" width="100%" /></td>
+<td align="center" width="50%"><b>Drug Interaction Alerts</b><br><img src="diagrams/demo_drug_interaction.png" width="100%" /></td>
+</tr>
+</table>
+
 ## Tech Stack
 
 **AI & Backend**
 
-<img src="https://img.shields.io/badge/Google ADK-4285F4?style=flat-square&logo=googlecloud&logoColor=white"> <img src="https://img.shields.io/badge/Gemini 2.5-8E75B2?style=flat-square&logo=google&logoColor=white"> <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white"> <img src="https://img.shields.io/badge/MCP Protocol-FF6F00?style=flat-square&logo=googlecloud&logoColor=white">
+<img src="https://img.shields.io/badge/Google ADK-4285F4?style=flat-square&logo=googlecloud&logoColor=white"> <img src="https://img.shields.io/badge/Gemini 2.5-8E75B2?style=flat-square&logo=google&logoColor=white"> <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white"> <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white"> <img src="https://img.shields.io/badge/MCP Protocol-FF6F00?style=flat-square&logo=googlecloud&logoColor=white">
 
 **Data & Infrastructure**
 
@@ -88,7 +131,7 @@ flowchart LR
 
 **Frontend**
 
-<img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=white"> <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white"> <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white">
+<img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=white"> <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white"> <img src="https://img.shields.io/badge/Tailwind CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white"> <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white">
 
 ---
 
