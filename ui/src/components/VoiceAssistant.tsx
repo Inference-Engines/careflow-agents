@@ -13,26 +13,47 @@ type VoiceState = 'idle' | 'listening' | 'processing';
 type SpeechRecognitionInstance = any;
 
 function getSpeechRecognition(): SpeechRecognitionInstance | null {
+    if (typeof window === 'undefined') return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
-    return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+    const SRClass = w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+    return SRClass;
+}
+
+/** Check browser support without instantiating */
+function isSpeechRecognitionSupported(): boolean {
+    return getSpeechRecognition() !== null;
 }
 
 const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
     const [transcript, setTranscript] = useState('');
+    const [supported, setSupported] = useState(true);
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const transcriptRef = useRef('');
+
+    // Check browser support on mount
+    useEffect(() => {
+        setSupported(isSpeechRecognitionSupported());
+    }, []);
 
     const startListening = useCallback(() => {
         const SR = getSpeechRecognition();
         if (!SR) {
-            alert('Voice input is not supported in this browser. Please try Chrome or Edge.');
+            setSupported(false);
+            alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
             return;
+        }
+
+        // Stop any existing recognition instance first
+        if (recognitionRef.current) {
+            try { recognitionRef.current.abort(); } catch { /* ignore */ }
+            recognitionRef.current = null;
         }
 
         const recognition = new SR();
         recognition.lang = 'en-IN';
+        recognition.continuous = false;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognitionRef.current = recognition;
@@ -43,12 +64,22 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
             setTranscript('');
         };
 
-        recognition.onresult = (event: { results: SpeechRecognitionInstance }) => {
-            const current = Array.from(event.results as Iterable<SpeechRecognitionInstance>)
-                .map((r: SpeechRecognitionInstance) => r[0].transcript as string)
-                .join('');
-            transcriptRef.current = current;
-            setTranscript(current);
+        recognition.onresult = (event: { results: SpeechRecognitionInstance; resultIndex: number }) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
+                if (result.isFinal) {
+                    finalTranscript += result[0].transcript;
+                } else {
+                    interimTranscript += result[0].transcript;
+                }
+            }
+            const current = finalTranscript || interimTranscript;
+            if (current) {
+                transcriptRef.current = current;
+                setTranscript(current);
+            }
         };
 
         recognition.onend = async () => {
@@ -60,22 +91,57 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
             setVoiceState('idle');
             setTranscript('');
             transcriptRef.current = '';
+            recognitionRef.current = null;
         };
 
-        recognition.onerror = () => {
+        recognition.onerror = (event: { error: string }) => {
+            console.warn('[CareFlow STT] Recognition error:', event.error);
+            // 'no-speech' is expected when user doesn't speak — not a real error
+            if (event.error === 'no-speech') {
+                setVoiceState('idle');
+                setTranscript('');
+                transcriptRef.current = '';
+                recognitionRef.current = null;
+                return;
+            }
+            if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                alert('Microphone access was denied. Please allow microphone access and try again.');
+                setSupported(false);
+            }
             setVoiceState('idle');
             setTranscript('');
             transcriptRef.current = '';
+            recognitionRef.current = null;
         };
 
-        recognition.start();
+        try {
+            recognition.start();
+        } catch (err) {
+            console.error('[CareFlow STT] Failed to start recognition:', err);
+            setVoiceState('idle');
+            recognitionRef.current = null;
+        }
     }, [onSend]);
 
     const stopListening = useCallback(() => {
         recognitionRef.current?.stop();
     }, []);
 
+    // Cleanup recognition on unmount
+    useEffect(() => {
+        return () => {
+            if (recognitionRef.current) {
+                try { recognitionRef.current.abort(); } catch { /* ignore */ }
+                recognitionRef.current = null;
+            }
+        };
+    }, []);
+
     const handleClick = () => {
+        if (!supported) {
+            alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
+            return;
+        }
         if (voiceState === 'idle') startListening();
         else if (voiceState === 'listening') stopListening();
     };

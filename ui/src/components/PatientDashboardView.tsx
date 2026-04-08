@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { t } from '../lib/i18n';
 import type { UseAgentChatReturn } from '../lib/useAgentChat';
+import { useSpeechSynthesis } from '../lib/useSpeechSynthesis';
 import { fetchLatestMetric, fetchMetricTrend, fetchActiveMedications, fetchAppointments, markMedicationTaken, fetchDrugInteractions } from '../lib/api';
 import type { MetricLatest, Medication, Appointment as ApiAppointment, DrugInteraction } from '../lib/api';
 
@@ -192,6 +193,7 @@ const Skeleton = ({ className }: { className?: string }) => (
 
 const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, onViewChange }) => {
     const { messages, status, sendMessage, agentActivities } = agentChat;
+    const tts = useSpeechSynthesis();
     const [inputText, setInputText] = useState('');
     const [takenMeds, setTakenMeds] = useState<Set<string>>(new Set());
     const [drugAlertsExpanded, setDrugAlertsExpanded] = useState(false);
@@ -639,6 +641,22 @@ const PatientDashboardView: React.FC<PatientDashboardViewProps> = ({ agentChat, 
                                             msg === messages[messages.length - 1] && (
                                                 <span className="inline-block w-1.5 h-4 bg-primary/60 ml-0.5 animate-pulse rounded-sm align-middle" />
                                             )}
+                                        {/* TTS speak/stop button for assistant messages */}
+                                        {msg.role === 'assistant' && msg.content && !isStreaming && tts.supported && (
+                                            <button
+                                                onClick={() => tts.speak(msg.content, msg.id)}
+                                                className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 hover:text-primary transition-colors duration-200"
+                                                title={tts.speakingMessageId === msg.id ? 'Stop reading' : 'Read aloud'}
+                                            >
+                                                <Icon
+                                                    icon={tts.speakingMessageId === msg.id
+                                                        ? 'solar:volume-cross-bold'
+                                                        : 'solar:volume-loud-bold'}
+                                                    width={14}
+                                                />
+                                                <span>{tts.speakingMessageId === msg.id ? 'Stop' : 'Read aloud'}</span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
