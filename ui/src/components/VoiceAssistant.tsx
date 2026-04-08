@@ -52,7 +52,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ prompt, onSend }) => {
         }
 
         const recognition = new SR();
-        recognition.lang = 'en-IN';
+        recognition.lang = navigator.language || 'en-US';
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
