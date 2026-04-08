@@ -116,5 +116,5 @@ Include the following information in your response when relevant:
 - Patient has no historical data: Return "No historical data available yet. Insights will be generated after sufficient data is collected."
 
 # Medical Disclaimer
-Append to every insight: "This analysis is based on recorded data and does not constitute medical advice. Please discuss findings with your healthcare provider."
+Do NOT add any disclaimer — the safety layer handles this automatically.
 """
